@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Coloring Book</title>
+<meta name="description" content="A cozy kawaii coloring book: mandalas, cute animals, relaxing sounds, and pages you can keep or mint on Starknet Sepolia.">
+<meta name="theme-color" content="#f6e7f4">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/book.css">
+</head>
+<body data-theme="pastel" data-screen="cover">
+<svg class="doodle d1" viewBox="0 0 64 64" aria-hidden="true"><path fill="#f3a0c0" d="M32 54C14 40 8 28 14 20c6-8 14-4 18 2 4-6 12-10 18-2 6 8 0 20-18 34z"/></svg>
+<svg class="doodle d2" viewBox="0 0 64 64" aria-hidden="true"><path fill="#f6d56b" d="M32 6l6 16h16l-13 10 5 16-14-10-14 10 5-16L10 22h16z"/></svg>
+<svg class="doodle d3" viewBox="0 0 80 40" aria-hidden="true"><path fill="none" stroke="#7d6b8a" stroke-width="2" d="M4 28c8-16 16-16 24 0s16 16 24 0 16-16 24 0"/></svg>
+<svg class="doodle d4" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="8" fill="#9fd7ee"/><circle cx="20" cy="22" r="2" fill="#fff"/></svg>
+
+<header class="top">
+  <button class="brand" id="homeBtn" type="button">
+    <b>Coloring Book</b>
+    <small>paper &amp; crayons</small>
+  </button>
+  <div class="spacer"></div>
+  <button class="pill" id="galleryBtn" type="button">The book</button>
+  <button class="pill" id="backupBtn" type="button">Backup</button>
+  <button class="iconbtn" id="soundQuick" type="button" aria-pressed="false" title="Sounds">♪</button>
+</header>
+
+<main>
+  <section id="screen-cover" class="screen">
+    <div class="cover-wrap">
+      <button class="cover-book" id="openBook" type="button" aria-label="Open the coloring book">
+        <span class="cover-spine" aria-hidden="true"></span>
+        <span class="cover-front">
+          <span class="cover-kicker">a little paper book</span>
+          <h2>Coloring<br>Book</h2>
+          <span class="cover-sub">Mandalas, kawaii friends, and a tin of crayons. Color a page, then keep it.</span>
+          <canvas class="cover-art" id="coverArt" width="440" height="440" aria-hidden="true"></canvas>
+          <span class="cover-btn">Open the book</span>
+        </span>
+      </button>
+      <p class="cover-note">21 pages · phone &amp; laptop · works offline · Sepolia stickers when you want them</p>
+    </div>
+  </section>
+
+  <section id="screen-gallery" class="screen hidden">
+    <div class="book-spread">
+      <div class="gallery-head">
+        <h2>Pick a page</h2>
+        <div class="seg" role="tablist" aria-label="Page kinds">
+          <button type="button" id="filter-all" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" id="filter-mandala" data-filter="mandala" aria-pressed="false">Mandalas</button>
+          <button type="button" id="filter-animal" data-filter="animal" aria-pressed="false">Animals</button>
+        </div>
+      </div>
+      <div class="thumbs" id="thumbs"></div>
+    </div>
+  </section>
+
+  <section id="screen-color" class="screen hidden">
+    <div class="studio">
+      <div class="stage">
+        <div class="tools" style="margin-bottom:8px">
+          <button class="tool" id="tool-fill" type="button" aria-pressed="true"><i class="pencil-ico" aria-hidden="true"></i> Pencil</button>
+          <button class="tool" id="tool-erase" type="button" aria-pressed="false"><i class="eraser-ico" aria-hidden="true"></i> Eraser</button>
+          <button class="tool" id="tool-undo" type="button">Undo</button>
+          <button class="tool" id="tool-clear" type="button">Clear</button>
+          <button class="tool" id="tool-surprise" type="button">Surprise me</button>
+          <button class="tool" id="btn-png" type="button">Save PNG</button>
+          <button class="tool" id="btn-mint" type="button">Coming soon</button>
+        </div>
+        <div class="sheet-row">
+          <div class="binding" aria-hidden="true"></div>
+          <div class="sheet" id="sheet">
+            <canvas id="pageCanvas" aria-label="Coloring page"></canvas>
+          </div>
+        </div>
+        <div class="pager">
+          <button class="iconbtn" id="pagePrev" type="button" aria-label="Previous page">‹</button>
+          <div>
+            <div class="name" id="pageName">Lotus Bloom</div>
+            <div class="meta" id="pageMeta"></div>
+          </div>
+          <button class="iconbtn" id="pageNext" type="button" aria-label="Next page">›</button>
+        </div>
+      </div>
+
+      <aside class="stationery">
+        <div class="tin">
+          <div class="kicker">Crayon tin</div>
+          <h3>Pick a color</h3>
+          <div class="crayons" id="crayons"></div>
+          <div class="color-readout">
+            <div class="swatch-lg" id="currentSwatch"></div>
+            <div>
+              <div class="magic-label">Magic crayon</div>
+              <div class="hex" id="hexLabel">#000000</div>
+            </div>
+            <input type="color" id="magicPicker" aria-label="Magic crayon color picker" value="#3aa0d8">
+          </div>
+          <label class="slider">Hue <span id="hueVal"></span>
+            <input id="hue" type="range" min="0" max="360" value="200">
+          </label>
+          <label class="slider">Saturation <span id="satVal"></span>
+            <input id="sat" type="range" min="0" max="100" value="80">
+          </label>
+          <label class="slider">Lightness <span id="litVal"></span>
+            <input id="lit" type="range" min="0" max="100" value="55">
+          </label>
+          <div class="kicker" style="margin-top:8px">Recent</div>
+          <div class="recent" id="recent"></div>
+        </div>
+
+        <div class="card" id="soundCard">
+          <div class="kicker">Music box</div>
+          <h3>Relaxing sounds</h3>
+          <div class="sounds" id="sounds"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="tool" id="mixToggle" type="button" aria-pressed="true">Mixing on</button>
+            <button class="tool" id="stopSounds" type="button">Stop all</button>
+            <label class="slider" style="flex:1;min-width:140px">Volume
+              <input id="volume" type="range" min="0" max="100" value="60" aria-label="Volume">
+            </label>
+          </div>
+          <p class="small hidden" id="audioErr">Sound could not start in this window.</p>
+        </div>
+
+        <div class="card">
+          <div class="kicker">Around the book</div>
+          <h3>Desk theme</h3>
+          <div class="sounds" id="themes"></div>
+          <div class="kicker" style="margin-top:8px">Background</div>
+          <div class="bgdots" id="bgdots"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<div id="modalRoot"></div>
+<div id="toast" class="hidden" role="status" aria-live="polite"></div>
+
+<script src="js/pages.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/app.js"></script>
+<script src="js/starknet-config.js"></script>
+<script src="js/starknet-abi.js"></script>
+<script src="js/starknet.js"></script>
+</body>
+</html>
