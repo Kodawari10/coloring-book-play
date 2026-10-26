@@ -44,6 +44,7 @@
       v.sfx = v.sfx === true;
       v.sfxVolume = clampVol(v.sfxVolume, 0.35);
       v.tuning = v.tuning === '528' ? '528' : '432';
+      if (v.filter !== 'all' && v.filter !== 'mandala' && v.filter !== 'animal' && v.filter !== 'new') v.filter = 'all';
       if (Array.isArray(v.sounds) && window.CB_migrateSoundId) {
         v.sounds = v.sounds.map((id) => window.CB_migrateSoundId(id)).filter(Boolean);
       }
@@ -72,6 +73,7 @@
   }
   function colorHex() { return COL.hslToHex(state.hsl[0], state.hsl[1], state.hsl[2]); }
   function shownPages() {
+    if (state.filter === 'new') return PAGES.filter((p) => p.fresh);
     return PAGES.filter((p) => state.filter === 'all' || p.kind === state.filter);
   }
 
@@ -129,10 +131,20 @@
       const hole = document.createElement('span');
       hole.className = 'hole';
       hole.setAttribute('aria-hidden', 'true');
+      const tab = document.createElement('span');
+      tab.className = 'tab';
+      tab.setAttribute('aria-hidden', 'true');
       const c = document.createElement('canvas');
       const label = document.createElement('span');
       label.textContent = p.name;
-      btn.append(hole, c, label);
+      btn.append(hole, tab, c, label);
+      if (p.fresh) {
+        btn.dataset.fresh = '1';
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = 'New';
+        btn.append(badge);
+      }
       const fills = fillsOf(p);
       if (fills.some(Boolean)) {
         const star = document.createElement('span');
@@ -147,7 +159,7 @@
       c.width = px;
       c.height = px;
       const ctx = c.getContext('2d');
-      if (ctx) DRAW.drawPage(ctx, p, fills, px, 3.2);
+      if (ctx) DRAW.drawPage(ctx, p, fills, px, 4);
     });
     document.querySelectorAll('[data-filter]').forEach((b) => {
       b.setAttribute('aria-pressed', b.dataset.filter === state.filter ? 'true' : 'false');
@@ -162,7 +174,7 @@
     const px = Math.round(css * dpr);
     if (canvas.width !== px) { canvas.width = px; canvas.height = px; }
     const ctx = canvas.getContext('2d');
-    if (ctx) DRAW.drawPage(ctx, page, fills, px, 2.2);
+    if (ctx) DRAW.drawPage(ctx, page, fills, px, 3);
     $('#pageName').textContent = page.name;
     const shapes = page.regions.filter((r) => !r.line).length;
     const done = page.regions.filter((r, i) => !r.line && fills[i]).length;
@@ -182,16 +194,35 @@
       return palette[i % palette.length];
     });
     const ctx = c.getContext('2d');
-    if (ctx) DRAW.drawPage(ctx, page, fills, c.width, 2.4);
+    if (ctx) DRAW.drawPage(ctx, page, fills, c.width, 3);
   }
 
+  function filledCount(page, fills) {
+    let n = 0;
+    for (let i = 0; i < page.regions.length; i++) {
+      if (!page.regions[i].line && fills[i]) n++;
+    }
+    return n;
+  }
+  function celebrate() {
+    if (reduceMotion) return;
+    sheet.classList.remove('done');
+    void sheet.offsetWidth;
+    sheet.classList.add('done');
+    clearTimeout(celebrate.t);
+    celebrate.t = setTimeout(() => sheet.classList.remove('done'), 1400);
+  }
   function commit(next) {
     const page = pageById(state.pageId);
     const cur = fillsOf(page);
+    const before = filledCount(page, cur);
     hist[page.id] = (hist[page.id] || []).concat([cur]).slice(-80);
     state.fills[page.id] = next;
+    const shapes = page.regions.filter((r) => !r.line).length;
+    const after = filledCount(page, next);
     save();
     draw();
+    if (after === shapes && before < shapes) celebrate();
   }
   function pushRecent(c) {
     state.recent = [c, ...state.recent.filter((x) => x !== c)].slice(0, 12);
@@ -481,7 +512,7 @@
     const ctx = c.getContext('2d');
     ctx.fillStyle = window.CB_PAPER;
     ctx.fillRect(0, 0, 1200, 1200);
-    DRAW.drawPage(ctx, page, fills, 1200, 2.2);
+    DRAW.drawPage(ctx, page, fills, 1200, 3);
     const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
     if (!blob) { toast('This browser could not make a PNG.'); return; }
     const a = document.createElement('a');

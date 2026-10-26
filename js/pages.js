@@ -1,4 +1,4 @@
-/* Coloring Book drawings: ten mandalas and eleven kawaii animals.
+/* Coloring Book drawings: mandalas and kawaii animals.
    Each region is a fillable path in a 400 by 400 picture. A region with `m`
    is the same shape mirrored across the middle. `line` is a stroke (whiskers,
    a smile). `base` keeps eyes ink-dark and sparkles white until you color them. */
@@ -105,6 +105,9 @@ function triRays(out, n, r0, r1, w, off, g) {
     }
 }
 const ring = (r, g) => ({ d: Cc(CX, CX, r), g });
+function annulus(r0, r1) {
+    return seg(r0, r1, 0, Math.PI) + seg(r0, r1, Math.PI, TAU);
+}
 function lotus() {
     const o = [{ d: BG, g: "bg" }, ring(192, "o0")];
     ringSegs(o, 162, 192, 24, 0, "o1", "o2");
@@ -139,7 +142,7 @@ function sunWheel() {
     o.push(ring(80, "c"));
     triRays(o, 16, 40, 79, 0.13, 0, "rays");
     o.push(ring(40, "core"));
-    ringSegs(o, 20, 40, 8, 0, "r4a", "r4b");
+    ringSegs(o, 20, 32, 8, 0, "r4a", "r4b");
     o.push(ring(20, "mid"));
     return o;
 }
@@ -192,7 +195,7 @@ function swirl(a, r0, r1, w, t) {
     return `M${P(r0, a)}C${P(r0 + d * 0.4, a - w)} ${P(r1 - d * 0.2, a + t - w * 0.5)} ${P(r1, a + t)}C${P(r1 - d * 0.35, a + t + w * 0.2)} ${P(r0 + d * 0.4, a + w * 0.6)} ${P(r0, a)}Z`;
 }
 function heartBloom() {
-    const o = [{ d: BG, g: "bg" }, ring(190, "a")];
+    const o = [{ d: BG, g: "bg" }, { d: annulus(190, 198), g: "a" }];
     ringSegs(o, 170, 190, 20, 0, "s1", "s2");
     o.push(ring(170, "b"));
     around(o, 12, TAU / 24, "d12", (a) => diamond(a, 118, 168, 0.08));
@@ -344,6 +347,7 @@ function owl() {
             o.push(R(`M${x} ${y}q12 16 24 0q-12 6 -24 0Z`, { clip: belly, g: "feather" }));
     });
     o.push(R("M0 340Q200 318 400 346L400 366Q200 340 0 360Z", { g: "branch" }), R("M56 342C66 312 96 310 104 320C94 344 70 348 56 342Z", { g: "leaf" }), R("M330 356C340 326 370 324 378 334C368 358 344 362 330 356Z", { g: "leaf" }), ...pair(E(176, 340, 17, 9), { g: "foot" }), ...pair(Cc(158, 172, 44), { g: "disc" }), R("M188 206Q200 228 212 206Q200 198 188 206Z", { g: "beak" }), ...face(172, 42, 24, { mouth: "none" }));
+    o.push(L("M186 236q14 9 28 0"));
     return o;
 }
 function butterfly() {
@@ -387,7 +391,7 @@ function turtle() {
 function elephant() {
     const hat = "M200 36C190 60 178 86 170 102Q200 114 230 102C222 86 210 60 200 36Z";
     return [
-        B(), ...deco([["h", 50, 60, 13], ["t", 350, 64, 12], ["s", 340, 150, 9], ["s", 60, 150, 9], ["h", 362, 300, 10], ["t", 40, 300, 9]]),
+        B(), ...deco([["h", 50, 60, 13], ["t", 350, 64, 12], ["s", 348, 268, 11], ["s", 52, 268, 11], ["h", 362, 300, 10], ["t", 40, 300, 9]]),
         R("M0 348H400V400H0Z", { g: "ground" }),
         R(E(200, 312, 74, 54), { g: "body" }),
         ...pair(E(166, 356, 22, 14), { g: "foot" }),
@@ -396,7 +400,7 @@ function elephant() {
         R(E(200, 175, 96, 86), { g: "head" }),
         R("M212 205C214 246 208 270 184 272C168 273 166 254 180 253C192 252 190 236 188 205Z", { g: "trunk" }),
         R(hat, { g: "hat" }), R("M176 80H224V92H176Z", { clip: hat, g: "hatBand" }), R(Cc(200, 36, 10), { g: "pom" }),
-        ...face(165, 46, 18, { mouth: "none" }),
+        ...face(165, 46, 18, { mouth: "smile" }),
     ];
 }
 function bunny() {
@@ -465,6 +469,7 @@ function penguin() {
         R("M236 274C244 296 252 312 256 322C246 330 236 330 226 324C226 306 224 290 222 278Z", { g: "scarf" }),
         R(E(200, 206, 15, 9), { g: "beak" }),
         ...face(180, 40, 17, { mouth: "none" }),
+        L("M186 222q14 8 28 0"),
     ];
 }
 function unicorn() {
@@ -485,6 +490,291 @@ function unicorn() {
         ...face(190, 42, 20),
     ];
 }
+function ellRot(cx, cy, rx, ry, rot) {
+    const c = Math.cos(rot);
+    const s = Math.sin(rot);
+    const x0 = cx - rx * c;
+    const y0 = cy - rx * s;
+    const x1 = cx + rx * c;
+    const y1 = cy + rx * s;
+    const deg = ((rot * 180) / Math.PI).toFixed(1);
+    return `M${fx(x0)} ${fx(y0)}A${fx(rx)} ${fx(ry)} ${deg} 1 0 ${fx(x1)} ${fx(y1)}A${fx(rx)} ${fx(ry)} ${deg} 1 0 ${fx(x0)} ${fx(y0)}Z`;
+}
+function pawBits(cx, cy, s, ang) {
+    const bits = [R(ellRot(cx - Math.cos(ang) * s * 0.35, cy - Math.sin(ang) * s * 0.35, s * 0.62, s * 0.48, ang), { g: "pad" })];
+    for (let i = -1; i <= 1; i++) {
+        const a = ang + i * 0.55;
+        bits.push(R(ellRot(cx + Math.cos(a) * s * 0.78, cy + Math.sin(a) * s * 0.78, s * 0.26, s * 0.2, a), { g: "toe" }));
+    }
+    return bits;
+}
+function pawParade() {
+    const o = [{ d: BG, g: "bg" }, ring(188, "rim")];
+    ringSegs(o, 168, 188, 16, 0, "s1", "s2");
+    o.push(ring(148, "inner"));
+    for (let i = 0; i < 6; i++) {
+        const a = -Math.PI / 2 + (i * TAU) / 6;
+        o.push(...pawBits(CX + 104 * Math.cos(a), CX + 104 * Math.sin(a), 26, a));
+    }
+    o.push(R(heart(CX, CX + 4, 26), { g: "heart" }));
+    o.push(ring(16, "core"));
+    return o;
+}
+function starHearts() {
+    const o = [{ d: BG, g: "bg" }, ring(190, "a")];
+    around(o, 8, 0, "star", (a) => starAt(CX + 158 * Math.cos(a), CX + 158 * Math.sin(a), 5, 20, 9));
+    o.push(ring(138, "b"));
+    around(o, 8, TAU / 16, "heart", (a) => heart(CX + 108 * Math.cos(a), CX + 108 * Math.sin(a), 16));
+    o.push(ring(74, "c"));
+    around(o, 6, 0, "spark", (a) => spark(CX + 54 * Math.cos(a), CX + 54 * Math.sin(a), 12));
+    o.push({ d: starAt(CX, CX, 6, 28, 12), g: "core" });
+    return o;
+}
+function sweetBloom() {
+    const o = [{ d: BG, g: "bg" }, ring(192, "a")];
+    petals(o, 12, 78, 186, 0.22, 0, "petal");
+    dots(o, 12, 166, 8, TAU / 24, "dot");
+    o.push(ring(76, "b"));
+    around(o, 6, 0, "heart", (a) => heartP(a, 22, 72, 0.3));
+    o.push(ring(20, "c"));
+    o.push({ d: starAt(CX, CX, 5, 18, 8), g: "star" });
+    return o;
+}
+const ground = () => R("M0 348Q200 328 400 348V400H0Z", { g: "ground" });
+function hamster() {
+    return [
+        B(), ground(),
+        ...deco([["h", 46, 54, 12], ["s", 354, 52, 12], ["t", 36, 250, 10], ["h", 360, 210, 9]]),
+        R(E(292, 292, 16, 11), { g: "seed" }),
+        R(E(200, 314, 86, 52), { g: "body" }), R(E(200, 326, 46, 28), { g: "belly" }),
+        ...pair(E(158, 360, 24, 13), { g: "paw" }),
+        ...pair(Cc(116, 156, 26), { g: "ear" }), ...pair(Cc(116, 158, 13), { g: "inEar" }),
+        R(E(200, 196, 108, 88), { g: "head" }),
+        ...pair(E(146, 214, 22, 16), { g: "cheek" }),
+        R(E(200, 222, 14, 10), { g: "nose" }),
+        ...face(196, 42, 20),
+    ];
+}
+function redpanda() {
+    const tail = "M270 328C348 338 374 262 338 228C316 208 286 232 306 260C320 286 304 308 270 312Z";
+    const head = E(200, 180, 100, 84);
+    return [
+        B(), ground(),
+        ...deco([["h", 48, 54, 12], ["s", 352, 64, 11], ["t", 36, 230, 10]]),
+        R(tail, { g: "tail" }),
+        R(E(328, 252, 22, 12), { clip: tail, g: "ring" }),
+        R(E(314, 292, 20, 11), { clip: tail, g: "ring" }),
+        R(E(200, 316, 72, 50), { g: "body" }), R(E(200, 328, 38, 28), { g: "belly" }),
+        ...pair(E(166, 360, 20, 12), { g: "paw" }),
+        ...pair("M124 148C108 106 118 70 136 72C154 74 166 106 172 130Z", { g: "ear" }),
+        ...pair("M132 136C124 108 130 88 140 88C150 88 156 110 160 128Z", { g: "inEar" }),
+        R(head, { g: "head" }),
+        R("M112 190C134 232 168 222 200 212C232 222 266 232 288 190C280 248 246 260 200 260C154 260 120 248 112 190Z", { clip: head, g: "mask" }),
+        R(E(200, 214, 10, 7), { g: "nose" }),
+        ...face(182, 40, 18, { mouth: "smile" }),
+    ];
+}
+function axolotl() {
+    return [
+        B(), R("M0 336Q200 318 400 336V400H0Z", { g: "water" }),
+        ...deco([["s", 46, 48, 12], ["h", 354, 54, 11], ["s", 64, 300, 9]]),
+        R(Cc(64, 86, 8), { g: "bub" }), R(Cc(338, 96, 6), { g: "bub" }), R(Cc(300, 48, 5), { g: "bub" }),
+        R(E(200, 304, 102, 46), { g: "body" }), R(E(200, 312, 54, 24), { g: "belly" }),
+        ...pair(E(128, 340, 30, 12), { g: "foot" }),
+        ...pair(E(74, 150, 18, 26), { g: "gill" }),
+        ...pair(E(64, 188, 20, 22), { g: "gill" }),
+        ...pair(E(76, 224, 16, 20), { g: "gill" }),
+        R(E(200, 190, 104, 70), { g: "head" }),
+        ...face(186, 44, 18, { mouth: "smile" }),
+    ];
+}
+function otter() {
+    return [
+        B(), R("M0 344Q200 326 400 344V400H0Z", { g: "water" }),
+        ...deco([["h", 46, 50, 12], ["s", 354, 58, 12], ["t", 36, 200, 9]]),
+        R(Cc(334, 168, 20), { g: "shell" }), R(heart(334, 166, 7), { g: "heart" }),
+        R("M262 292C318 270 358 300 340 332C318 354 276 336 262 304Z", { g: "tail" }),
+        R(E(196, 300, 86, 56), { g: "body" }), R(E(196, 312, 46, 30), { g: "belly" }),
+        ...pair(E(164, 352, 26, 14), { g: "paw" }),
+        ...pair(Cc(84, 132, 24), { g: "ear" }), ...pair(Cc(84, 134, 12), { g: "inEar" }),
+        R(E(200, 176, 96, 78), { g: "head" }),
+        R(E(200, 200, 12, 8), { g: "nose" }),
+        ...face(176, 40, 18),
+    ];
+}
+function koala() {
+    return [
+        B(), ground(),
+        ...deco([["h", 46, 52, 12], ["s", 300, 46, 10], ["t", 36, 230, 10]]),
+        R("M318 360C310 292 328 236 340 234C354 232 360 270 350 324C364 286 376 278 380 300C384 338 360 370 318 360Z", { g: "branch" }),
+        R(E(200, 318, 78, 50), { g: "body" }), R(E(200, 328, 40, 26), { g: "belly" }),
+        ...pair(E(162, 360, 22, 13), { g: "paw" }),
+        ...pair(Cc(96, 112, 34), { g: "ear" }), ...pair(Cc(96, 114, 18), { g: "inEar" }),
+        R(E(200, 186, 100, 84), { g: "head" }),
+        R(E(200, 214, 24, 16), { g: "nose" }),
+        ...face(178, 42, 18, { mouth: "smile" }),
+    ];
+}
+function sloth() {
+    const head = E(200, 206, 96, 82);
+    return [
+        B(),
+        R("M28 64H372V98H28Z", { g: "branch" }),
+        R(Cc(64, 80, 16), { g: "leaf" }), R(Cc(336, 74, 14), { g: "leaf" }),
+        ...deco([["h", 48, 150, 11], ["s", 352, 156, 11], ["t", 56, 340, 10]]),
+        R(E(78, 132, 16, 48), { g: "arm" }), R(E(322, 132, 16, 48), { g: "arm" }),
+        R(E(200, 312, 68, 58), { g: "body" }), R(E(200, 324, 34, 32), { g: "belly" }),
+        R(head, { g: "head" }),
+        ...pair(E(152, 204, 28, 20), { g: "mask" }),
+        ...face(200, 36, 16, { mouth: "smile" }),
+    ];
+}
+function frog() {
+    return [
+        B(), R("M0 328Q200 310 400 328V400H0Z", { g: "pond" }),
+        R(E(200, 292, 128, 34), { g: "pad" }),
+        ...deco([["h", 44, 48, 11], ["s", 354, 46, 12], ["t", 36, 180, 9]]),
+        R(E(200, 246, 108, 64), { g: "body" }), R(E(200, 258, 58, 32), { g: "belly" }),
+        R(E(78, 348, 40, 14), { g: "leg" }), R(E(322, 348, 40, 14), { g: "leg" }),
+        R(E(200, 168, 88, 60), { g: "head" }),
+        ...face(132, 48, 22, { mouth: "smile" }),
+    ];
+}
+function duck() {
+    return [
+        B(), ground(),
+        ...deco([["h", 46, 52, 12], ["s", 354, 58, 11], ["t", 34, 210, 9]]),
+        R(E(236, 304, 78, 50), { g: "body" }),
+        R(E(292, 268, 26, 34), { g: "wing" }),
+        R(E(168, 188, 76, 66), { g: "head" }),
+        R(E(176, 220, 30, 14), { g: "bill" }),
+        ...face(176, 30, 16, { cx: 168, mouth: "none" }),
+        L("M160 220q16 7 32 0"),
+    ];
+}
+function puppy() {
+    return [
+        B(), ground(),
+        ...deco([["h", 44, 50, 13], ["s", 354, 56, 12], ["t", 36, 220, 10], ["h", 362, 240, 9]]),
+        R(Cc(300, 286, 18), { g: "tail" }),
+        R(E(200, 312, 78, 52), { g: "body" }), R(E(200, 324, 40, 26), { g: "belly" }),
+        ...pair(E(162, 360, 24, 13), { g: "paw" }),
+        ...pair("M118 172C68 194 60 252 102 266C136 276 156 220 142 174Z", { g: "ear" }),
+        ...pair("M114 184C78 202 74 242 104 254C126 262 140 216 132 186Z", { g: "inEar" }),
+        R(E(200, 186, 96, 80), { g: "head" }),
+        R("M168 156H232V172H168Z", { g: "collar" }), R(Cc(236, 150, 8), { g: "tag" }),
+        R(E(200, 214, 16, 12), { g: "nose" }),
+        ...face(182, 40, 18),
+    ];
+}
+function bear() {
+    return [
+        B(), ground(),
+        ...deco([["h", 46, 52, 12], ["s", 354, 58, 12], ["t", 34, 220, 10]]),
+        R(E(200, 314, 84, 54), { g: "body" }), R(E(200, 326, 44, 28), { g: "belly" }),
+        R(E(108, 318, 24, 30), { g: "arm" }), R(E(292, 318, 24, 30), { g: "arm" }),
+        ...pair(E(164, 362, 22, 13), { g: "paw" }),
+        ...pair(Cc(96, 108, 32), { g: "ear" }), ...pair(Cc(96, 110, 16), { g: "inEar" }),
+        R(E(200, 180, 102, 86), { g: "head" }),
+        R(E(200, 210, 28, 18), { g: "snout" }),
+        R(E(200, 206, 10, 7), { g: "nose" }),
+        ...face(174, 42, 18, { mouth: "smile" }),
+    ];
+}
+function hedgehog() {
+    const o = [
+        B(), ground(),
+        ...deco([["h", 44, 50, 11], ["s", 356, 60, 11], ["t", 36, 250, 9]]),
+    ];
+    for (let i = 0; i < 11; i++) {
+        const a = Math.PI * 1.15 + (i * Math.PI * 0.7) / 10;
+        const x1 = 200 + Math.cos(a) * 58;
+        const y1 = 214 + Math.sin(a) * 46;
+        const x2 = 200 + Math.cos(a - 0.13) * 112;
+        const y2 = 214 + Math.sin(a - 0.13) * 96;
+        const x3 = 200 + Math.cos(a + 0.13) * 112;
+        const y3 = 214 + Math.sin(a + 0.13) * 96;
+        o.push(R(`M${fx(x1)} ${fx(y1)}L${fx(x2)} ${fx(y2)}L${fx(x3)} ${fx(y3)}Z`, { g: "spike" }));
+    }
+    o.push(
+        R(E(200, 236, 76, 54), { g: "body" }), R(E(200, 250, 38, 26), { g: "belly" }),
+        ...pair(E(168, 292, 16, 11), { g: "paw" }),
+        ...pair(Cc(158, 128, 14), { g: "ear" }),
+        R(E(200, 186, 64, 48), { g: "head" }),
+        R(E(200, 204, 10, 7), { g: "nose" }),
+        ...face(184, 26, 13, { mouth: "smile" }),
+    );
+    return o;
+}
+function seal() {
+    return [
+        B(), R("M0 292Q200 274 400 292V400H0Z", { g: "water" }),
+        ...deco([["s", 46, 46, 12], ["h", 354, 52, 11], ["t", 36, 150, 9]]),
+        R(Cc(336, 132, 24), { g: "ball" }), R(starAt(336, 132, 5, 12, 5), { g: "star" }),
+        R(E(200, 248, 118, 64), { g: "body" }), R(E(214, 260, 58, 32), { g: "belly" }),
+        R(E(70, 328, 42, 14), { g: "flipper" }), R(E(330, 328, 42, 14), { g: "flipper" }),
+        R(E(168, 168, 70, 58), { g: "head" }),
+        R(E(168, 190, 14, 9), { g: "nose" }),
+        ...face(164, 26, 14, { cx: 168, mouth: "smile" }),
+    ];
+}
+function chick() {
+    return [
+        B(), ground(),
+        ...deco([["s", 46, 48, 12], ["h", 354, 56, 11], ["t", 34, 200, 9]]),
+        R("M146 368C146 304 254 304 254 368Z", { g: "shell" }),
+        R(E(200, 248, 68, 56), { g: "body" }),
+        R(E(122, 248, 22, 14), { g: "wing" }), R(E(278, 248, 22, 14), { g: "wing" }),
+        R(E(200, 170, 62, 52), { g: "head" }),
+        R(E(200, 196, 18, 10), { g: "beak" }),
+        ...face(162, 24, 13, { mouth: "none" }),
+        L("M186 196q14 6 28 0"),
+    ];
+}
+function piglet() {
+    return [
+        B(), ground(),
+        ...deco([["h", 44, 52, 12], ["s", 354, 58, 12], ["t", 34, 220, 10]]),
+        R("M292 292C324 270 356 292 342 316C366 308 368 342 338 348C308 356 286 324 292 292Z", { g: "tail" }),
+        R(E(200, 312, 84, 52), { g: "body" }), R(E(200, 324, 42, 26), { g: "belly" }),
+        ...pair(E(160, 360, 22, 13), { g: "hoof" }),
+        ...pair("M132 128C116 86 130 64 146 70C160 76 166 104 158 132Z", { g: "ear" }),
+        R(E(200, 180, 98, 82), { g: "head" }),
+        R(E(200, 212, 26, 18), { g: "snout" }),
+        ...pair(E(192, 212, 5, 7), { g: "nostril" }),
+        ...face(170, 40, 16, { mouth: "smile" }),
+    ];
+}
+function deer() {
+    return [
+        B(), ground(),
+        ...deco([["h", 46, 160, 11], ["s", 354, 150, 11], ["t", 36, 300, 9]]),
+        R(E(200, 312, 70, 50), { g: "body" }),
+        ...pair(Cc(174, 300, 9), { g: "spot" }), ...pair(Cc(160, 328, 7), { g: "spot" }),
+        R(E(168, 372, 14, 18), { g: "leg" }), R(E(232, 372, 14, 18), { g: "leg" }),
+        ...pair("M148 118C118 68 132 34 150 40C164 44 170 74 166 108Z", { g: "antler" }),
+        ...pair(Cc(132, 48, 8), { g: "tine" }),
+        ...pair("M130 146C112 108 124 78 140 82C152 86 158 116 150 144Z", { g: "ear" }),
+        R(E(200, 184, 78, 68), { g: "head" }),
+        R(E(200, 206, 12, 8), { g: "nose" }),
+        ...face(180, 30, 14, { mouth: "smile" }),
+    ];
+}
+function mouse() {
+    return [
+        B(), ground(),
+        ...deco([["h", 44, 54, 11], ["t", 36, 210, 9]]),
+        R(Cc(334, 236, 30), { g: "cheese" }),
+        R(Cc(324, 226, 8), { g: "hole" }), R(Cc(348, 246, 6), { g: "hole" }),
+        R("M250 286C292 268 328 214 304 186C282 206 268 250 246 280Z", { g: "tail" }),
+        R(E(188, 304, 68, 48), { g: "body" }), R(E(188, 316, 34, 24), { g: "belly" }),
+        R(E(156, 348, 18, 11), { g: "paw" }), R(E(214, 348, 18, 11), { g: "paw" }),
+        ...pair(Cc(124, 146, 40), { g: "ear" }), ...pair(Cc(124, 148, 22), { g: "inEar" }),
+        R(E(190, 186, 70, 60), { g: "head" }),
+        R(E(190, 208, 10, 7), { g: "nose" }),
+        ...face(184, 26, 14, { cx: 190, mouth: "smile" }),
+    ];
+}
 const PAGES = [
     { id: "lotus", name: "Lotus Bloom", kind: "mandala", regions: lotus() },
     { id: "compass", name: "Star Compass", kind: "mandala", regions: compass() },
@@ -496,6 +786,9 @@ const PAGES = [
     { id: "spiral", name: "Spiral Swirl", kind: "mandala", regions: spiral() },
     { id: "gear", name: "Gear Rose", kind: "mandala", regions: gearRose() },
     { id: "lattice", name: "Diamond Lattice", kind: "mandala", regions: lattice() },
+    { id: "paw", name: "Paw Parade", kind: "mandala", fresh: true, regions: pawParade() },
+    { id: "starheart", name: "Star Hearts", kind: "mandala", fresh: true, regions: starHearts() },
+    { id: "bloom", name: "Sweet Bloom", kind: "mandala", fresh: true, regions: sweetBloom() },
     { id: "cat", name: "Kitty", kind: "animal", regions: cat() },
     { id: "fish", name: "Fishy", kind: "animal", regions: fish() },
     { id: "owl", name: "Owl", kind: "animal", regions: owl() },
@@ -507,6 +800,22 @@ const PAGES = [
     { id: "fox", name: "Fox", kind: "animal", regions: fox() },
     { id: "penguin", name: "Penguin", kind: "animal", regions: penguin() },
     { id: "unicorn", name: "Unicorn", kind: "animal", regions: unicorn() },
+    { id: "hamster", name: "Hamster", kind: "animal", fresh: true, regions: hamster() },
+    { id: "redpanda", name: "Red Panda", kind: "animal", fresh: true, regions: redpanda() },
+    { id: "axolotl", name: "Axolotl", kind: "animal", fresh: true, regions: axolotl() },
+    { id: "otter", name: "Otter", kind: "animal", fresh: true, regions: otter() },
+    { id: "koala", name: "Koala", kind: "animal", fresh: true, regions: koala() },
+    { id: "sloth", name: "Sloth", kind: "animal", fresh: true, regions: sloth() },
+    { id: "frog", name: "Frog", kind: "animal", fresh: true, regions: frog() },
+    { id: "duck", name: "Duck", kind: "animal", fresh: true, regions: duck() },
+    { id: "puppy", name: "Puppy", kind: "animal", fresh: true, regions: puppy() },
+    { id: "bear", name: "Bear", kind: "animal", fresh: true, regions: bear() },
+    { id: "hedgehog", name: "Hedgehog", kind: "animal", fresh: true, regions: hedgehog() },
+    { id: "seal", name: "Seal", kind: "animal", fresh: true, regions: seal() },
+    { id: "chick", name: "Chick", kind: "animal", fresh: true, regions: chick() },
+    { id: "piglet", name: "Piglet", kind: "animal", fresh: true, regions: piglet() },
+    { id: "deer", name: "Deer", kind: "animal", fresh: true, regions: deer() },
+    { id: "mouse", name: "Mouse", kind: "animal", fresh: true, regions: mouse() },
 ];
 /* ---------------- canvas drawing ---------------- */
 const pathCache = new Map();
@@ -575,6 +884,90 @@ function hitTest(page, x, y) {
     }
     return -1;
 }
+function onCurve(d) {
+    const toks = d.match(/[MmLlHhVvCcQqAaZz]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) || [];
+    const pts = [];
+    let i = 0, x = 0, y = 0, sx = 0, sy = 0;
+    const n = () => parseFloat(toks[i++]);
+    while (i < toks.length) {
+        const t = toks[i++];
+        if (t === "M" || t === "L") { x = n(); y = n(); pts.push([x, y]); if (t === "M") { sx = x; sy = y; } }
+        else if (t === "m" || t === "l") { x += n(); y += n(); pts.push([x, y]); if (t === "m") { sx = x; sy = y; } }
+        else if (t === "H") { x = n(); pts.push([x, y]); }
+        else if (t === "h") { x += n(); pts.push([x, y]); }
+        else if (t === "V") { y = n(); pts.push([x, y]); }
+        else if (t === "v") { y += n(); pts.push([x, y]); }
+        else if (t === "Q") { n(); n(); x = n(); y = n(); pts.push([x, y]); }
+        else if (t === "q") { n(); n(); x += n(); y += n(); pts.push([x, y]); }
+        else if (t === "C") { n(); n(); n(); n(); x = n(); y = n(); pts.push([x, y]); }
+        else if (t === "c") { n(); n(); n(); n(); x += n(); y += n(); pts.push([x, y]); }
+        else if (t === "A" || t === "a") {
+            n(); n(); n(); n(); n();
+            const ax = n(), ay = n();
+            if (t === "a") { x += ax; y += ay; } else { x = ax; y = ay; }
+            pts.push([x, y]);
+        }
+        else if (t === "Z" || t === "z") { x = sx; y = sy; }
+    }
+    return pts;
+}
+function pointInRegion(c, r, x, y) {
+    if (x < 0 || y < 0 || x > 400 || y > 400) return false;
+    if (!c.isPointInPath(getPath(r.d, !!r.m), x, y)) return false;
+    if (r.clip && !c.isPointInPath(getPath(r.clip, !!r.m), x, y)) return false;
+    return true;
+}
+/* A region is fillable when some point of its closed shape is the one a tap would color. */
+function auditFillable() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 400;
+    canvas.height = 400;
+    const probe = canvas.getContext("2d");
+    if (!probe) return ["no-canvas"];
+    const misses = [];
+    const offsets = [[0, 0], [4, 0], [-4, 0], [0, 4], [0, -4], [7, 5], [-7, 5], [5, -7], [-6, -6], [10, 0], [0, 10], [-10, 0], [0, -10]];
+    for (const page of PAGES) {
+        page.regions.forEach((r, i) => {
+            if (r.line) return;
+            const pts = onCurve(r.d).map((p) => (r.m ? [400 - p[0], p[1]] : p));
+            const cands = pts.slice();
+            for (let k = 0; k + 1 < pts.length; k++)
+                cands.push([(pts[k][0] + pts[k + 1][0]) / 2, (pts[k][1] + pts[k + 1][1]) / 2]);
+            if (pts.length) {
+                let sx = 0, sy = 0;
+                pts.forEach((p) => { sx += p[0]; sy += p[1]; });
+                cands.push([sx / pts.length, sy / pts.length]);
+            }
+            let found = false;
+            for (let k = 0; k < cands.length && !found; k++) {
+                for (let o = 0; o < offsets.length; o++) {
+                    const x = cands[k][0] + offsets[o][0];
+                    const y = cands[k][1] + offsets[o][1];
+                    if (!pointInRegion(probe, r, x, y)) continue;
+                    if (hitTest(page, x, y) === i) { found = true; break; }
+                }
+            }
+            if (!found) {
+                probe.setTransform(1, 0, 0, 1, 0, 0);
+                probe.clearRect(0, 0, 400, 400);
+                probe.save();
+                if (r.clip) probe.clip(getPath(r.clip, !!r.m));
+                probe.fillStyle = "#000";
+                probe.fill(getPath(r.d, !!r.m));
+                probe.restore();
+                const data = probe.getImageData(0, 0, 400, 400).data;
+                for (let y = 0; y < 400 && !found; y += 2) {
+                    for (let x = 0; x < 400; x += 2) {
+                        if (data[(y * 400 + x) * 4 + 3] < 40) continue;
+                        if (hitTest(page, x + 0.5, y + 0.5) === i) { found = true; break; }
+                    }
+                }
+            }
+            if (!found) misses.push(page.id + "#" + i + (r.g ? ":" + r.g : ""));
+        });
+    }
+    return misses;
+}
 
 const SKINS = [
     { id: "pastel", label: "Calm Pastel", bg: [275, 60, 95], panel: [200, 70, 92], accent: [330, 65, 68] },
@@ -602,5 +995,5 @@ window.CB_WHITE = WHITE;
 window.CB_SKINS = SKINS;
 window.CB_BG_PRESETS = BG_PRESETS.map(function (c) { return hx(c); });
 window.CB_COLOR = { hslToHex: hslToHex, hexToHsl: hexToHsl, hx: hx, hs: hs, lookFromHsl: lookFromHsl };
-window.CB_DRAW = { drawPage: drawPage, hitTest: hitTest, regionColor: regionColor };
+window.CB_DRAW = { drawPage: drawPage, hitTest: hitTest, regionColor: regionColor, auditFillable: auditFillable };
 })();

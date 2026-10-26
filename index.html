@@ -16,6 +16,8 @@
 <svg class="doodle d2" viewBox="0 0 64 64" aria-hidden="true"><path fill="#f6d56b" d="M32 6l6 16h16l-13 10 5 16-14-10-14 10 5-16L10 22h16z"/></svg>
 <svg class="doodle d3" viewBox="0 0 80 40" aria-hidden="true"><path fill="none" stroke="#7d6b8a" stroke-width="2" d="M4 28c8-16 16-16 24 0s16 16 24 0 16-16 24 0"/></svg>
 <svg class="doodle d4" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="8" fill="#9fd7ee"/><circle cx="20" cy="22" r="2" fill="#fff"/></svg>
+<svg class="doodle d5" viewBox="0 0 90 50" aria-hidden="true"><path fill="#fff" d="M22 36c-8 0-14-6-14-13 0-6 4-11 10-12 2-8 10-13 18-11 6-6 16-6 22 0 8 1 14 8 14 16 0 9-8 16-17 16H22z"/></svg>
+<svg class="doodle d6" viewBox="0 0 48 48" aria-hidden="true"><path fill="#f6d56b" d="M24 4l3 12 12 3-12 3-3 12-3-12-12-3 12-3z"/></svg>
 
 <header class="top">
   <button class="brand" id="homeBtn" type="button">
@@ -34,25 +36,56 @@
       <button class="cover-book" id="openBook" type="button" aria-label="Open the coloring book">
         <span class="cover-spine" aria-hidden="true"></span>
         <span class="cover-front">
-          <span class="cover-kicker">a little paper book</span>
-          <h2>Coloring<br>Book</h2>
-          <span class="cover-sub">Mandalas, kawaii friends, and a tin of crayons. Color a page, then keep it.</span>
+          <span class="cover-sticker s-heart" aria-hidden="true">♥</span>
+          <span class="cover-sticker s-star" aria-hidden="true">★</span>
+          <span class="cover-top">
+            <span>
+              <span class="cover-kicker">a little paper book</span>
+              <h2>Coloring<br>Book</h2>
+            </span>
+            <span class="cover-mascot" aria-hidden="true">
+              <svg viewBox="0 0 140 150">
+                <ellipse cx="46" cy="46" rx="14" ry="22" fill="#fffaf3"/>
+                <ellipse cx="94" cy="46" rx="14" ry="22" fill="#fffaf3"/>
+                <ellipse cx="46" cy="48" rx="7" ry="13" fill="#f7b7d4"/>
+                <ellipse cx="94" cy="48" rx="7" ry="13" fill="#f7b7d4"/>
+                <ellipse cx="70" cy="108" rx="34" ry="28" fill="#fffaf3"/>
+                <circle cx="70" cy="78" r="32" fill="#fffaf3"/>
+                <g class="mascot-arm">
+                  <ellipse cx="30" cy="96" rx="11" ry="16" fill="#fffaf3"/>
+                </g>
+                <ellipse cx="112" cy="100" rx="10" ry="14" fill="#fffaf3"/>
+                <circle cx="58" cy="76" r="5.5" fill="#2b2428"/>
+                <circle cx="84" cy="76" r="5.5" fill="#2b2428"/>
+                <circle cx="60" cy="74" r="2" fill="#fff"/>
+                <circle cx="86" cy="74" r="2" fill="#fff"/>
+                <ellipse cx="50" cy="88" rx="6" ry="3.5" fill="#f7b7d4"/>
+                <ellipse cx="90" cy="88" rx="6" ry="3.5" fill="#f7b7d4"/>
+                <path d="M62 92q8 7 16 0" fill="none" stroke="#2b2428" stroke-width="2.4" stroke-linecap="round"/>
+              </svg>
+            </span>
+          </span>
+          <span class="cover-sub">Pastel pages, kawaii friends, and a tin of crayons. Color a page, then keep it.</span>
           <canvas class="cover-art" id="coverArt" width="440" height="440" aria-hidden="true"></canvas>
           <span class="cover-btn">Open the book</span>
         </span>
       </button>
-      <p class="cover-note">21 pages · phone &amp; laptop · works offline · Sepolia stickers when you want them</p>
+      <p class="cover-note">40 pages · phone &amp; laptop · works offline · Sepolia stickers when you want them</p>
     </div>
   </section>
 
   <section id="screen-gallery" class="screen hidden">
     <div class="book-spread">
       <div class="gallery-head">
-        <h2>Pick a page</h2>
+        <div>
+          <h2>Pick a page</h2>
+          <p class="gallery-note">Little pictures to color. New friends wear a badge.</p>
+        </div>
         <div class="seg" role="tablist" aria-label="Page kinds">
           <button type="button" id="filter-all" data-filter="all" aria-pressed="true">All</button>
-          <button type="button" id="filter-mandala" data-filter="mandala" aria-pressed="false">Mandalas</button>
           <button type="button" id="filter-animal" data-filter="animal" aria-pressed="false">Animals</button>
+          <button type="button" id="filter-mandala" data-filter="mandala" aria-pressed="false">Mandalas</button>
+          <button type="button" id="filter-new" data-filter="new" aria-pressed="false">New</button>
         </div>
       </div>
       <div class="thumbs" id="thumbs"></div>
