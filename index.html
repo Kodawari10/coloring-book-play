@@ -25,7 +25,7 @@
     <small>paper &amp; crayons</small>
   </button>
   <div class="spacer"></div>
-  <button class="pill" id="galleryBtn" type="button">The book</button>
+  <button class="pill" id="galleryBtn" type="button">Contents</button>
   <button class="pill" id="backupBtn" type="button">Backup</button>
   <button class="iconbtn" id="soundQuick" type="button" aria-pressed="false" title="Sounds">♪</button>
 </header>
@@ -70,29 +70,11 @@
           <span class="cover-btn">Open the book</span>
         </span>
       </button>
-      <p class="cover-note">40 pages · phone &amp; laptop · works offline · Sepolia stickers when you want them</p>
+      <p class="cover-note">40 pictures, one to a page · phone &amp; laptop · works offline</p>
     </div>
   </section>
 
-  <section id="screen-gallery" class="screen hidden">
-    <div class="book-spread">
-      <div class="gallery-head">
-        <div>
-          <h2>Pick a page</h2>
-          <p class="gallery-note">Little pictures to color. New friends wear a badge.</p>
-        </div>
-        <div class="seg" role="tablist" aria-label="Page kinds">
-          <button type="button" id="filter-all" data-filter="all" aria-pressed="true">All</button>
-          <button type="button" id="filter-animal" data-filter="animal" aria-pressed="false">Animals</button>
-          <button type="button" id="filter-mandala" data-filter="mandala" aria-pressed="false">Mandalas</button>
-          <button type="button" id="filter-new" data-filter="new" aria-pressed="false">New</button>
-        </div>
-      </div>
-      <div class="thumbs" id="thumbs"></div>
-    </div>
-  </section>
-
-  <section id="screen-color" class="screen hidden">
+  <section id="screen-book" class="screen hidden">
     <div class="studio">
       <div class="stage">
         <div class="tools" style="margin-bottom:8px">
@@ -104,11 +86,10 @@
           <button class="tool" id="btn-png" type="button">Save PNG</button>
           <button class="tool" id="btn-mint" type="button">Coming soon</button>
         </div>
-        <div class="sheet-row">
-          <div class="binding" aria-hidden="true"></div>
-          <div class="sheet" id="sheet">
-            <canvas id="pageCanvas" aria-label="Coloring page"></canvas>
-          </div>
+        <div class="spread" id="spread">
+          <div class="leaf" id="leafLeft"></div>
+          <div class="gutter" aria-hidden="true"></div>
+          <div class="leaf" id="leafRight"></div>
         </div>
         <div class="pager">
           <button class="iconbtn" id="pagePrev" type="button" aria-label="Previous page">‹</button>
@@ -180,6 +161,35 @@
           <div class="bgdots" id="bgdots"></div>
         </div>
       </aside>
+    </div>
+    <div id="park" hidden>
+      <div id="sheet" class="sheet">
+        <canvas id="pageCanvas" aria-label="Coloring page"></canvas>
+      </div>
+      <div id="facing" class="sheet facing">
+        <canvas id="facingCanvas" aria-hidden="true"></canvas>
+      </div>
+      <div id="contentsPage" class="contents-page">
+        <div class="gallery-head">
+          <div>
+            <h2>Contents</h2>
+            <p class="gallery-note">One picture on each page. Tap a number to open that page.</p>
+          </div>
+          <div class="seg" role="tablist" aria-label="Page kinds">
+            <button type="button" id="filter-all" data-filter="all" aria-pressed="true">All</button>
+            <button type="button" id="filter-animal" data-filter="animal" aria-pressed="false">Animals</button>
+            <button type="button" id="filter-mandala" data-filter="mandala" aria-pressed="false">Mandalas</button>
+            <button type="button" id="filter-new" data-filter="new" aria-pressed="false">New</button>
+          </div>
+        </div>
+        <div class="thumbs" id="thumbs"></div>
+      </div>
+      <div id="backPage" class="back-page">
+        <p class="cover-kicker">the back cover</p>
+        <h2>The end</h2>
+        <p>Every page kept the same picture.</p>
+        <button class="cover-btn" id="closeBook" type="button">Close the book</button>
+      </div>
     </div>
   </section>
 </main>

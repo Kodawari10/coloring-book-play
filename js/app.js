@@ -10,6 +10,10 @@
   const $ = (s) => document.querySelector(s);
   const sheet = $('#sheet');
   const canvas = $('#pageCanvas');
+  const facing = $('#facing');
+  const facingCanvas = $('#facingCanvas');
+  const contentsPage = $('#contentsPage');
+  const backPage = $('#backPage');
   const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const state = load() || {
@@ -28,6 +32,7 @@
     tool: 'fill',
     hsl: [200, 80, 55],
     minted: {},
+    leaf: 0,
   };
   const hist = {};
   let engine = null;
@@ -45,6 +50,7 @@
       v.sfxVolume = clampVol(v.sfxVolume, 0.35);
       v.tuning = v.tuning === '528' ? '528' : '432';
       if (v.filter !== 'all' && v.filter !== 'mandala' && v.filter !== 'animal' && v.filter !== 'new') v.filter = 'all';
+      if (typeof v.leaf !== 'number' || v.leaf < 0 || v.leaf > PAGES.length + 1) v.leaf = 0;
       if (Array.isArray(v.sounds) && window.CB_migrateSoundId) {
         v.sounds = v.sounds.map((id) => window.CB_migrateSoundId(id)).filter(Boolean);
       }
@@ -75,6 +81,17 @@
   function shownPages() {
     if (state.filter === 'new') return PAGES.filter((p) => p.fresh);
     return PAGES.filter((p) => state.filter === 'all' || p.kind === state.filter);
+  }
+  /* The book order never follows the contents filter. Page n is PAGES[n - 1]. */
+  function folioAt(index) {
+    if (index <= 0) return { type: 'contents' };
+    if (index > PAGES.length) return { type: 'back' };
+    const drawing = PAGES[index - 1];
+    return { type: 'drawing', drawing: drawing, id: drawing.id, number: drawing.number, name: drawing.name, kind: drawing.kind };
+  }
+  function drawingNow() {
+    const folio = folioAt(state.leaf || 0);
+    return folio.type === 'drawing' ? folio.drawing : null;
   }
 
   function applyTheme() {
@@ -111,10 +128,8 @@
   function setScreen(name) {
     document.body.dataset.screen = name;
     $('#screen-cover').classList.toggle('hidden', name !== 'cover');
-    $('#screen-gallery').classList.toggle('hidden', name !== 'gallery');
-    $('#screen-color').classList.toggle('hidden', name !== 'color');
-    if (name === 'gallery') renderThumbs();
-    if (name === 'color') draw();
+    $('#screen-book').classList.toggle('hidden', name !== 'book');
+    if (name === 'book') renderBook();
   }
 
   function renderThumbs() {
@@ -126,7 +141,8 @@
       btn.className = 'thumb';
       btn.dataset.page = p.id;
       btn.dataset.kind = p.kind;
-      btn.setAttribute('aria-label', p.name);
+      btn.dataset.number = String(p.number);
+      btn.setAttribute('aria-label', 'Page ' + p.number + ', ' + p.name);
       if (p.id === state.pageId) btn.setAttribute('aria-current', 'true');
       const hole = document.createElement('span');
       hole.className = 'hole';
@@ -135,9 +151,13 @@
       tab.className = 'tab';
       tab.setAttribute('aria-hidden', 'true');
       const c = document.createElement('canvas');
+      const num = document.createElement('span');
+      num.className = 'num';
+      num.textContent = String(p.number);
       const label = document.createElement('span');
+      label.className = 'label';
       label.textContent = p.name;
-      btn.append(hole, tab, c, label);
+      btn.append(hole, tab, c, num, label);
       if (p.fresh) {
         btn.dataset.fresh = '1';
         const badge = document.createElement('span');
@@ -152,7 +172,7 @@
         star.textContent = '✦';
         btn.append(star);
       }
-      btn.onclick = () => openPage(p.id, 1);
+      btn.onclick = () => openDrawing(p.id);
       box.append(btn);
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const px = Math.round(120 * dpr);
@@ -167,7 +187,8 @@
   }
 
   function draw() {
-    const page = pageById(state.pageId);
+    const page = drawingNow();
+    if (!page) return;
     const fills = fillsOf(page);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const css = Math.max(240, Math.floor(canvas.clientWidth || sheet.clientWidth || 360));
@@ -179,7 +200,7 @@
     const shapes = page.regions.filter((r) => !r.line).length;
     const done = page.regions.filter((r, i) => !r.line && fills[i]).length;
     const kind = page.kind === 'mandala' ? 'Mandala' : 'Animal';
-    $('#pageMeta').textContent = kind + ' · ' + done + ' of ' + shapes + ' shapes colored';
+    $('#pageMeta').textContent = 'Page ' + page.number + ' · ' + kind + ' · ' + done + ' of ' + shapes + ' shapes colored';
     sheet.classList.toggle('erase', state.tool === 'erase');
     paintCrayon();
   }
@@ -213,7 +234,8 @@
     celebrate.t = setTimeout(() => sheet.classList.remove('done'), 1400);
   }
   function commit(next) {
-    const page = pageById(state.pageId);
+    const page = drawingNow();
+    if (!page) return;
     const cur = fillsOf(page);
     const before = filledCount(page, cur);
     hist[page.id] = (hist[page.id] || []).concat([cur]).slice(-80);
@@ -232,10 +254,12 @@
 
   function onPointerDown(e) {
     if (e.button != null && e.button !== 0) return;
+    const pageHit = drawingNow();
+    if (!pageHit) return;
     const rect = canvas.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 400;
     const y = ((e.clientY - rect.top) / rect.height) * 400;
-    const page = pageById(state.pageId);
+    const page = pageHit;
     const idx = DRAW.hitTest(page, x, y);
     if (idx < 0) return;
     const cur = fillsOf(page);
@@ -248,7 +272,9 @@
   }
 
   function undo() {
-    const id = state.pageId;
+    const page = drawingNow();
+    if (!page) return;
+    const id = page.id;
     const h = hist[id] || [];
     if (!h.length) return;
     state.fills[id] = h.pop();
@@ -256,13 +282,15 @@
     draw();
   }
   function clearPage() {
-    const page = pageById(state.pageId);
+    const page = drawingNow();
+    if (!page) return;
     const cur = fillsOf(page);
     if (cur.every((v) => !v)) return;
     commit(emptyFills(page));
   }
   function surprise() {
-    const page = pageById(state.pageId);
+    const page = drawingNow();
+    if (!page) return;
     const base = Math.random() * 360;
     const scheme = [0, 30, 150, 180, 210, 300][Math.floor(Math.random() * 6)];
     const rnd = (a, b) => a + Math.random() * (b - a);
@@ -485,27 +513,115 @@
     dots.append(reset);
   }
 
-  function openPage(id, dir) {
-    const go = () => { state.pageId = id; save(); draw(); setScreen('color'); };
-    const turning = document.body.dataset.screen === 'color' && id !== state.pageId && !reduceMotion;
-    if (!turning) { go(); return; }
+  let turnToken = 0;
+  function openDrawing(id) {
+    const dest = pageById(id).number;
+    const cur = state.leaf || 0;
+    const delta = dest - cur;
+    goTo(dest, Math.abs(delta) === 1 ? (delta > 0 ? 1 : -1) : 0);
+  }
+  function goTo(leaf, dir) {
+    const max = PAGES.length + 1;
+    const next = Math.max(0, Math.min(max, leaf));
+    const prev = state.leaf || 0;
+    const apply = () => {
+      state.leaf = next;
+      const folio = folioAt(next);
+      if (folio.type === 'drawing') state.pageId = folio.id;
+      save();
+      renderBook();
+    };
+    if (document.body.dataset.screen !== 'book' || !dir || reduceMotion || next === prev) {
+      apply();
+      return;
+    }
     tap('rustle');
-    sheet.classList.remove('turn-next', 'turn-prev');
-    void sheet.offsetWidth;
-    sheet.classList.add(dir < 0 ? 'turn-prev' : 'turn-next');
-    setTimeout(go, 260);
-    sheet.addEventListener('animationend', () => sheet.classList.remove('turn-next', 'turn-prev'), { once: true });
+    const node = dir < 0 ? $('#leafLeft') : $('#leafRight');
+    node.classList.remove('turn-next', 'turn-prev');
+    void node.offsetWidth;
+    node.classList.add(dir < 0 ? 'turn-prev' : 'turn-next');
+    const token = ++turnToken;
+    setTimeout(() => {
+      node.classList.remove('turn-next', 'turn-prev');
+      if (token === turnToken) apply();
+    }, 280);
   }
   function step(dir) {
-    const list = shownPages();
-    let i = list.findIndex((p) => p.id === state.pageId);
-    if (i < 0) i = 0;
-    const n = list[(i + dir + list.length) % list.length];
-    openPage(n.id, dir);
+    const cur = state.leaf || 0;
+    const n = cur + dir;
+    if (n < 0) { setScreen('cover'); return; }
+    if (n > PAGES.length + 1) return;
+    goTo(n, dir);
+  }
+  function paintLeaf(el, index, active) {
+    const folio = folioAt(index);
+    el.classList.toggle('active', index === active);
+    el.dataset.folio = folio.type;
+    el.onclick = (e) => {
+      if (index === (state.leaf || 0)) return;
+      if (e.target.closest('button, a, input, label, .seg')) return;
+      const delta = index - (state.leaf || 0);
+      goTo(index, Math.abs(delta) === 1 ? (delta > 0 ? 1 : -1) : 0);
+    };
+    const foot = document.createElement('div');
+    foot.className = 'folio-foot';
+    if (folio.type === 'drawing') {
+      foot.textContent = String(folio.number);
+      const title = document.createElement('div');
+      title.className = 'folio-title';
+      title.textContent = folio.name;
+      el.replaceChildren(title, index === active ? sheet : facing, foot);
+    } else if (folio.type === 'contents') {
+      foot.textContent = 'Contents';
+      el.replaceChildren(contentsPage, foot);
+    } else {
+      foot.textContent = 'End';
+      el.replaceChildren(backPage, foot);
+    }
+  }
+  function paintFacing() {
+    const active = state.leaf || 0;
+    const left = active % 2 === 0 ? active : active - 1;
+    const other = left === active ? left + 1 : left;
+    const folio = folioAt(other);
+    const c = facingCanvas;
+    if (!c || folio.type !== 'drawing') return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const css = Math.max(200, Math.floor(c.clientWidth || 240));
+    const px = Math.round(css * dpr);
+    if (c.width !== px) { c.width = px; c.height = px; }
+    const ctx = c.getContext('2d');
+    if (ctx) DRAW.drawPage(ctx, folio.drawing, fillsOf(folio.drawing), px, 3);
+  }
+  function renderBook() {
+    const active = state.leaf || 0;
+    const left = active % 2 === 0 ? active : active - 1;
+    paintLeaf($('#leafLeft'), left, active);
+    paintLeaf($('#leafRight'), left + 1, active);
+    const folio = folioAt(active);
+    $('.stage').classList.toggle('quiet', folio.type !== 'drawing');
+    if (folio.type === 'drawing') {
+      $('#pageName').textContent = folio.name;
+      draw();
+    } else if (folio.type === 'contents') {
+      $('#pageName').textContent = 'Contents';
+      $('#pageMeta').textContent = PAGES.length + ' pictures, one on each page';
+      renderThumbs();
+    } else {
+      $('#pageName').textContent = 'The end';
+      $('#pageMeta').textContent = 'Back cover';
+    }
+    $('#pageNext').disabled = active >= PAGES.length + 1;
+    requestAnimationFrame(() => {
+      if (document.body.dataset.screen !== 'book') return;
+      if (drawingNow()) draw();
+      paintFacing();
+    });
   }
 
   async function downloadPNG() {
-    const page = pageById(state.pageId);
+    const page = drawingNow();
+    if (!page) return;
     const fills = fillsOf(page);
     const c = document.createElement('canvas');
     c.width = c.height = 1200;
@@ -651,7 +767,11 @@
     applyTheme();
     renderRecent();
     setTool(state.tool);
-    setScreen(document.body.dataset.screen === 'cover' ? 'gallery' : document.body.dataset.screen);
+    if (s.pageId) {
+      const restored = pageById(s.pageId);
+      if (restored && restored.id === s.pageId) state.leaf = restored.number;
+    }
+    setScreen(document.body.dataset.screen === 'cover' ? 'book' : document.body.dataset.screen);
     closeModal();
     toast('Backup restored');
   }
@@ -685,7 +805,8 @@
   }
 
   function mintModal() {
-    const page = pageById(state.pageId);
+    const page = drawingNow();
+    if (!page) return;
     const fills = fillsOf(page);
     const colored = page.regions.some((r, i) => !r.line && !r.base && fills[i]);
     const chain = window.CB_STARKNET;
@@ -724,8 +845,9 @@
 
   function bind() {
     $('#homeBtn').onclick = () => setScreen('cover');
-    $('#openBook').onclick = () => setScreen('gallery');
-    $('#galleryBtn').onclick = () => setScreen('gallery');
+    $('#openBook').onclick = () => { state.leaf = 0; setScreen('book'); };
+    $('#galleryBtn').onclick = () => { state.leaf = 0; setScreen('book'); };
+    $('#closeBook').onclick = () => setScreen('cover');
     $('#backupBtn').onclick = backupModal;
     $('#soundQuick').onclick = () => {
       if (playing.size) stopAllSounds();
@@ -734,7 +856,25 @@
     document.querySelectorAll('[data-filter]').forEach((b) => {
       b.onclick = () => { state.filter = b.dataset.filter; save(); renderThumbs(); };
     });
-    canvas.addEventListener('pointerdown', onPointerDown);
+    let swipe = null;
+    $('#spread').addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      if (e.target.closest('button, a, input, label, .seg')) return;
+      swipe = { x: e.clientX, y: e.clientY, t: e.target };
+    });
+    $('#spread').addEventListener('pointerup', (e) => {
+      if (!swipe) return;
+      const dx = e.clientX - swipe.x;
+      const dy = e.clientY - swipe.y;
+      const started = swipe.t;
+      swipe = null;
+      if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) {
+        step(dx < 0 ? 1 : -1);
+        return;
+      }
+      if (started && started.id === 'pageCanvas' && Math.hypot(dx, dy) < 14) onPointerDown(e);
+    });
+    $('#spread').addEventListener('pointercancel', () => { swipe = null; });
     $('#tool-fill').onclick = () => setTool('fill');
     $('#tool-erase').onclick = () => setTool('erase');
     $('#tool-undo').onclick = undo;
@@ -791,14 +931,22 @@
     bgPick.addEventListener('input', (e) => { state.customBg = e.target.value; save(); applyTheme(); });
     $('#bgdots').append(bgPick);
     window.addEventListener('keydown', (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && document.body.dataset.screen === 'color') {
+      const tag = e.target && e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const inBook = document.body.dataset.screen === 'book';
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && inBook) {
         e.preventDefault();
         undo();
       }
-      if (document.body.dataset.screen === 'color' && e.key === 'ArrowRight') step(1);
-      if (document.body.dataset.screen === 'color' && e.key === 'ArrowLeft') step(-1);
+      if (!inBook) return;
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); step(1); }
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); step(-1); }
     });
-    window.addEventListener('resize', () => { if (document.body.dataset.screen === 'color') draw(); });
+    window.addEventListener('resize', () => {
+      if (document.body.dataset.screen !== 'book') return;
+      if (drawingNow()) draw();
+      paintFacing();
+    });
   }
 
   buildCrayons();
@@ -821,7 +969,7 @@
     save,
     draw,
     setScreen,
-    refresh() { applyTheme(); paintCrayon(); if (document.body.dataset.screen === 'color') draw(); if (document.body.dataset.screen === 'gallery') renderThumbs(); },
+    refresh() { applyTheme(); paintCrayon(); if (document.body.dataset.screen === 'book') renderBook(); },
     async job(pageId) {
       const page = pageById(pageId || state.pageId);
       const fills = fillsOf(page);

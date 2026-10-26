@@ -169,10 +169,49 @@ main{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:16px 14p
 }
 .thumb[aria-current="true"]{outline:3px solid var(--accent)}
 .thumb .star{position:absolute;right:8px;top:4px;font-size:12px}
+.thumb .num{font-family:var(--serif);font-size:12px;color:#8a6078;letter-spacing:.04em}
+.stage.quiet .tools{opacity:.5}
+.spread{display:flex;align-items:stretch;min-width:0;filter:drop-shadow(0 16px 28px rgba(70,40,60,.16))}
+.gutter{
+  width:26px;flex:none;
+  background:
+    radial-gradient(circle at 50% 18px, #eef2f6 0 5px, #7e8b9c 6px 8px, transparent 9px) 0 0 / 100% 36px repeat-y,
+    linear-gradient(90deg, #c9b49a, #efe2d2 46%, #efe2d2 54%, #c9b49a);
+}
+.leaf{
+  flex:1 1 0;min-width:0;color:#2b2428;
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(rgba(120,90,50,.045) 1px, transparent 1px),
+    radial-gradient(rgba(90,70,40,.07) .6px, transparent .7px);
+  background-size:100% 28px, 6px 6px;
+  display:flex;flex-direction:column;position:relative;overflow:hidden;
+}
+#leafLeft{border-radius:16px 0 0 16px}
+#leafRight{border-radius:0 16px 16px 0}
+.leaf.active{box-shadow:inset 0 0 0 3px var(--accent)}
+.folio-title{font-family:var(--serif);text-align:center;padding:8px 8px 0;font-size:18px}
+.folio-foot{text-align:center;font-family:var(--serif);padding:2px 8px 8px;color:#8a7080;font-size:13px}
+.contents-page{overflow:auto;max-height:min(68vh, 640px);padding:8px 10px 0}
+.back-page{
+  min-height:280px;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;gap:8px;padding:28px 16px;color:#5c3458;
+  background:
+    radial-gradient(140px 90px at 80% 18%, #fff6c8, transparent 70%),
+    linear-gradient(165deg, #ffe3f1, #e4d4f8);
+}
+.back-page h2{font-size:42px}
+.back-page .cover-btn{border:0;cursor:pointer}
+.leaf .sheet{flex:1;box-shadow:none;border-radius:0;background:transparent;min-width:0}
+.leaf .sheet:after{display:none}
+.leaf.turn-next{animation:flipNext .45s ease;transform-origin:left center}
+.leaf.turn-prev{animation:flipPrev .45s ease;transform-origin:right center}
+#leafLeft.turn-next,#leafLeft.turn-prev{transform-origin:right center}
+#leafRight.turn-next,#leafRight.turn-prev{transform-origin:left center}
 
 /* ---------- the open coloring page ---------- */
 .studio{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
-.stage{flex:1 1 340px;min-width:0;max-width:720px}
+.stage{flex:1 1 340px;min-width:0;max-width:780px}
 .sheet-row{display:flex;align-items:stretch;perspective:1400px}
 .binding{
   width:34px;flex:none;border-radius:12px 0 0 12px;
@@ -341,9 +380,14 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   .studio{flex-direction:column;align-items:stretch}
   .stage,.stationery{flex:1 1 auto;width:100%;max-width:100%}
   .tools{max-width:100%}
+  .spread{display:block;filter:none}
+  .gutter{display:none}
+  .leaf{display:none;width:100%;border-radius:16px}
+  .leaf.active{display:flex}
+  .contents-page{max-height:none}
 }
 @media (prefers-reduced-motion: reduce){
-  .sheet.turn-next,.sheet.turn-prev,.mascot-arm,.doodle,.sheet.done:before{animation:none}
+  .sheet.turn-next,.sheet.turn-prev,.leaf.turn-next,.leaf.turn-prev,.mascot-arm,.doodle,.sheet.done:before{animation:none}
   .doodle{display:none}
   .thumb{transition:none}
 }

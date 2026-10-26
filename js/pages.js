@@ -817,6 +817,11 @@ const PAGES = [
     { id: "deer", name: "Deer", kind: "animal", fresh: true, regions: deer() },
     { id: "mouse", name: "Mouse", kind: "animal", fresh: true, regions: mouse() },
 ];
+/* A printed page number is fixed: page n is always this drawing, and no drawing is on two pages. */
+PAGES.forEach(function (page, index) { page.number = index + 1; });
+window.CB_BOOK = PAGES.map(function (page) {
+    return { number: page.number, id: page.id, name: page.name, kind: page.kind };
+});
 /* ---------------- canvas drawing ---------------- */
 const pathCache = new Map();
 function getPath(d, mirror) {
