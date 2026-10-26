@@ -23,9 +23,42 @@
     { id: 'musicbox', label: 'Music box', emoji: '🎵', group: 'tunes' },
     { id: 'chimes', label: 'Wind chimes', emoji: '🎐', group: 'tunes' },
     { id: 'kalimba', label: 'Little kalimba', emoji: '✨', group: 'tunes' },
+    { id: 'tone432', label: '432 Hz tone', emoji: '🫧', group: 'tones' },
+    { id: 'tone528', label: '528 Hz tone', emoji: '🌕', group: 'tones' },
   ];
 
-  const GROUP_LABELS = { world: 'Soft world', friends: 'Little friends', tunes: 'Lullabies' };
+  const GROUP_LABELS = {
+    world: 'Soft world',
+    friends: 'Little friends',
+    tunes: 'Lullabies',
+    tones: 'Steady tones',
+  };
+
+  /* Noise beds stay put. These restart with a short crossfade when tuning changes. */
+  const UNTUNED = ['rain', 'thunder', 'waves', 'stream', 'wind', 'campfire'];
+  const PITCHED = ['birds', 'crickets', 'frogs', 'whale', 'purr', 'brown', 'flute', 'harp', 'bowl', 'musicbox', 'chimes', 'kalimba'];
+
+  /* 432: A4 is 432, and every other note is that many semitones away.
+     528: the lullaby's key note (C5) is 528, and the other notes sit around it. */
+  const ROOT_MIDI = 72;
+
+  function normalizeTuning(mode) {
+    return mode === '528' || mode === 528 ? '528' : '432';
+  }
+  function a4Of(mode) {
+    if (normalizeTuning(mode) === '528') return 528 / Math.pow(2, 3 / 12);
+    return 432;
+  }
+  function hzOf(mode, midi) {
+    if (normalizeTuning(mode) === '528') return 528 * Math.pow(2, (midi - ROOT_MIDI) / 12);
+    return 432 * Math.pow(2, (midi - 69) / 12);
+  }
+  function rootOf(mode) {
+    return hzOf(mode, ROOT_MIDI);
+  }
+  function centerOf(mode) {
+    return normalizeTuning(mode) === '528' ? 528 : 432;
+  }
 
   /* Older ids, if a backup ever stored them, still point at a current sound. */
   const ALIASES = {
@@ -64,7 +97,6 @@
     return next && IDS.has(next) ? next : null;
   }
 
-  const hz = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -133,6 +165,24 @@ function filt(ctx, type, f, q, to) {
     osc.start(t);
     osc.stop(end);
     k.add(osc, end);
+  }
+
+  /* A held tone: two close sines, a soft octave, and a quiet bowl partial. */
+  function holdPad(k, dest, freq, level) {
+    const lp = filt(k.ctx, 'lowpass', Math.max(700, freq * 4), 0.6, dest);
+    const g = gainNode(k.ctx, level, lp);
+    lfo(k, 0.09, level * 0.18, g.gain);
+    [[1, 1, 'sine'], [1.004, 0.6, 'sine'], [2, 0.26, 'triangle'], [2.76, 0.14, 'sine']].forEach((part) => {
+      const osc = k.ctx.createOscillator();
+      osc.type = part[2];
+      osc.frequency.value = Math.max(24, freq * part[0]);
+      const vg = k.ctx.createGain();
+      vg.gain.value = part[1];
+      osc.connect(vg);
+      vg.connect(g);
+      osc.start();
+      k.add(osc);
+    });
   }
 
   function drip(k, to, when, peak, dur, center) {
@@ -207,7 +257,8 @@ function filt(ctx, type, f, q, to) {
       lfo(k, 0.13, 40, layer.hp.frequency);
     },
     brown(k) {
-      bed(k, 'brown', 0.2, 40, 480);
+      bed(k, 'brown', 0.14, 40, 420);
+      holdPad(k, k.out, k.center() / 2, 0.02);
     },
     campfire(k) {
       const warm = bed(k, 'brown', 0.16, 40, 260);
@@ -219,14 +270,14 @@ function filt(ctx, type, f, q, to) {
     },
     birds(k) {
       const sp = k.space(0.22, 0.2);
-      const scale = [784, 880, 988, 1046, 1175];
+      const scale = [79, 81, 83, 84, 86];
       k.loop(2.2, 5.2, (when) => {
         const n = 2 + Math.floor(rnd(0, 3));
         let idx = 1 + Math.floor(rnd(0, 2));
         const pan = rnd(-0.55, 0.55);
         for (let i = 0; i < n; i++) {
           idx = Math.max(0, Math.min(scale.length - 1, idx + pick([-1, 0, 1, 1])));
-          const f = scale[idx];
+          const f = k.hz(scale[idx]);
           voice(k, sp, {
             when: when + i * rnd(0.16, 0.24),
             f, endF: f * rnd(1.01, 1.06),
@@ -237,24 +288,25 @@ function filt(ctx, type, f, q, to) {
     },
     crickets(k) {
       const sp = k.space(0.14, 0.16);
-      const one = (f, pan, gap) => {
+      const one = (midi, pan, gap) => {
         k.loop(gap * 0.85, gap * 1.15, (when) => {
+          const f = k.hz(midi);
           for (let i = 0; i < 5; i++) {
             voice(k, sp, { when: when + i * 0.07, f, attack: 0.012, dur: 0.045, peak: 0.016, pan });
           }
           return gap + rnd(-0.08, 0.12);
         });
       };
-      one(2480, -0.45, 0.95);
-      one(2720, 0.5, 1.15);
+      one(99, -0.45, 0.95);
+      one(101, 0.5, 1.15);
     },
     frogs(k) {
       const sp = k.space(0.2, 0.22);
       k.loop(3.2, 6.4, (when) => {
         const pan = rnd(-0.4, 0.4);
-        voice(k, sp, { when, f: 430, attack: 0.02, dur: 0.11, peak: 0.04, pan });
-        voice(k, sp, { when, f: 452, attack: 0.02, dur: 0.11, peak: 0.016, pan });
-        voice(k, sp, { when: when + 0.14, f: 300, attack: 0.025, dur: 0.16, peak: 0.042, pan });
+        voice(k, sp, { when, f: k.hz(69), attack: 0.02, dur: 0.11, peak: 0.04, pan });
+        voice(k, sp, { when, f: k.hz(70), attack: 0.02, dur: 0.11, peak: 0.016, pan });
+        voice(k, sp, { when: when + 0.14, f: k.hz(62), attack: 0.025, dur: 0.16, peak: 0.042, pan });
       });
     },
     whale(k) {
@@ -262,7 +314,7 @@ function filt(ctx, type, f, q, to) {
       const sp = k.space(0.45, 0.28);
       k.loop(9, 15, (when) => {
         const up = Math.random() < 0.5;
-        const f = rnd(95, 140);
+        const f = k.hz(43 + Math.floor(rnd(0, 7)));
         const end = up ? f * rnd(1.35, 1.7) : f * rnd(0.62, 0.8);
         voice(k, sp, { when, f, endF: end, attack: 0.9, dur: rnd(3.2, 4.6), peak: 0.07, vib: 1.4, vibF: 3.2 });
         voice(k, sp, { when, f: f * 2, endF: end * 2, attack: 1.1, dur: rnd(2.4, 3.4), peak: 0.018, type: 'sine' });
@@ -275,7 +327,7 @@ function filt(ctx, type, f, q, to) {
       lfo(k, 0.16, 0.035, layer.g.gain);
       const osc = k.ctx.createOscillator();
       osc.type = 'sine';
-      osc.frequency.value = 48;
+      osc.frequency.value = k.center() / 8;
       const g = gainNode(k.ctx, 0.012, k.out);
       osc.connect(g);
       osc.start();
@@ -285,7 +337,7 @@ function filt(ctx, type, f, q, to) {
       const sp = k.space(0.28, 0.22);
       const phrase = [74, 76, 78, 81, 78, 76, 74, 74, 71, 69, 71, 74, 76, 74, 71, 69];
       k.pattern(phrase, 0.62, 20, (when, midi) => {
-        const f = hz(midi);
+        const f = k.hz(midi);
         voice(k, sp, { when, f, attack: 0.14, dur: 0.7, peak: 0.055, vib: f * 0.006, vibF: 4.6 });
         voice(k, sp, { when, f: f * 2, attack: 0.18, dur: 0.5, peak: 0.01, type: 'triangle' });
       });
@@ -305,7 +357,7 @@ function filt(ctx, type, f, q, to) {
         const up = Math.random() < 0.65;
         chord.forEach((midi, n) => {
           const at = when + (up ? n : chord.length - 1 - n) * 0.28;
-          const f = hz(midi);
+          const f = k.hz(midi);
           voice(k, sp, { when: at, f, attack: 0.012, dur: 2.6, peak: 0.04, type: 'triangle', pan: (n - 2) * 0.12 });
           voice(k, sp, { when: at, f, attack: 0.02, dur: 2.2, peak: 0.022 });
         });
@@ -314,9 +366,9 @@ function filt(ctx, type, f, q, to) {
     },
     bowl(k) {
       const sp = k.space(0.4, 0.26);
-      const roots = [hz(55), hz(57), hz(60), hz(62)];
+      const roots = [55, 57, 60, 62];
       k.loop(11, 16, (when) => {
-        const f = pick(roots);
+        const f = k.hz(pick(roots));
         [[1, 0.07], [2.76, 0.028], [5.15, 0.012]].forEach((part, i) => {
           voice(k, sp, { when, f: f * part[0], attack: 0.03, dur: 8 / (i + 1), peak: part[1] });
           voice(k, sp, { when, f: f * part[0] * 1.004, attack: 0.03, dur: 8 / (i + 1), peak: part[1] * 0.55 });
@@ -330,7 +382,7 @@ function filt(ctx, type, f, q, to) {
       const phrase = [76, 79, 81, 79, 76, 74, 72, 74, 76, 79, 81, 0, 79, 76, 74, 72];
       k.pattern(phrase, 0.5, 16, (when, midi) => {
         if (!midi) return;
-        const f = hz(midi);
+        const f = k.hz(midi);
         voice(k, sp, { when, f, attack: 0.008, dur: 1.15, peak: 0.045 });
         voice(k, sp, { when, f: f * 2.003, attack: 0.006, dur: 0.7, peak: 0.016 });
         voice(k, sp, { when, f: f * 4.01, attack: 0.004, dur: 0.28, peak: 0.006 });
@@ -338,11 +390,11 @@ function filt(ctx, type, f, q, to) {
     },
     chimes(k) {
       const sp = k.space(0.34, 0.22);
-      const bells = [hz(84), hz(86), hz(88), hz(91), hz(93)];
+      const bells = [84, 86, 88, 91, 93];
       k.loop(2.6, 5.8, (when) => {
         const n = Math.random() < 0.35 ? 2 : 1;
         for (let i = 0; i < n; i++) {
-          const f = pick(bells);
+          const f = k.hz(pick(bells));
           const at = when + i * rnd(0.2, 0.55);
           [[1, 0.028], [2.01, 0.012], [2.97, 0.006]].forEach((part) => {
             voice(k, sp, { when: at, f: f * part[0], attack: 0.01, dur: 3.6, peak: part[1], pan: rnd(-0.7, 0.7) });
@@ -354,11 +406,17 @@ function filt(ctx, type, f, q, to) {
       const sp = k.space(0.16, 0.14);
       const phrase = [60, 64, 67, 72, 67, 64, 65, 69, 72, 69, 67, 64, 60, 62, 64, 60];
       k.pattern(phrase, 0.42, 16, (when, midi) => {
-        const f = hz(midi);
+        const f = k.hz(midi);
         voice(k, sp, { when, f, attack: 0.005, dur: 0.95, peak: 0.05 });
         voice(k, sp, { when, f: f * 2.8, attack: 0.004, dur: 0.22, peak: 0.01, type: 'triangle' });
         voice(k, sp, { when, f: f * 5.05, attack: 0.003, dur: 0.1, peak: 0.005 });
       });
+    },
+    tone432(k) {
+      holdPad(k, k.space(0.46, 0.22), 432, 0.048);
+    },
+    tone528(k) {
+      holdPad(k, k.space(0.46, 0.22), 528, 0.048);
     },
   };
 
@@ -376,8 +434,11 @@ function filt(ctx, type, f, q, to) {
       this.volume = 0.6;
       this.sfxOn = false;
       this.sfxVolume = 0.35;
+      this.tuning = '432';
       this.lastUi = 0;
     }
+
+    hz(midi) { return hzOf(this.tuning, midi); }
 
     ensure() {
       if (!this.ctx) {
@@ -461,15 +522,27 @@ function filt(ctx, type, f, q, to) {
       }
     }
 
-    start(id) {
+    setTuning(mode) {
+      const next = normalizeTuning(mode);
+      if (this.tuning === next) return;
+      this.tuning = next;
+      PITCHED.forEach((id) => {
+        if (!this.active.has(id)) return;
+        this.stop(id, 0.4);
+        this.start(id, 0.55);
+      });
+    }
+
+    start(id, fadeIn) {
       const canon = migrateSoundId(id);
       if (!canon || this.active.has(canon)) return;
       const ctx = this.ensure();
       if (!this.bus) return;
       const now = ctx.currentTime;
       const out = ctx.createGain();
+      const fade = typeof fadeIn === 'number' ? fadeIn : 1.7;
       out.gain.setValueAtTime(0.0008, now);
-      out.gain.exponentialRampToValueAtTime(1, now + 1.7);
+      out.gain.exponentialRampToValueAtTime(1, now + fade);
       out.connect(this.bus);
       const sources = [];
       const timers = [];
@@ -498,6 +571,8 @@ function filt(ctx, type, f, q, to) {
           return s;
         },
         buf(kind) { return self.buf(kind); },
+        hz(midi) { return hzOf(self.tuning, midi); },
+        center() { return centerOf(self.tuning); },
         loop(minGap, maxGap, fn) {
           let next = ctx.currentTime + 0.45 + Math.random() * 0.5;
           const id = window.setInterval(() => {
@@ -537,26 +612,27 @@ function filt(ctx, type, f, q, to) {
         },
       };
       BUILD[canon](kit);
-      this.active.set(canon, () => {
+      this.active.set(canon, (fadeSec) => {
         alive = false;
         timers.forEach((stop) => stop());
         const t = ctx.currentTime;
-        const current = Math.max(0.0008, out.gain.value || 0.0008);
+        const fadeOut = typeof fadeSec === 'number' ? fadeSec : 0.9;
+        const current = Math.max(0.001, out.gain.value || 0.001);
         out.gain.cancelScheduledValues(t);
         out.gain.setValueAtTime(current, t);
-        out.gain.exponentialRampToValueAtTime(0.0008, t + 0.9);
+        out.gain.linearRampToValueAtTime(0.0008, t + fadeOut);
         window.setTimeout(() => {
           sources.forEach((s) => { try { s.stop(); } catch (e) { /* already stopped */ } });
           try { out.disconnect(); } catch (e) { /* already gone */ }
-        }, 1000);
+        }, Math.ceil(fadeOut * 1000) + 80);
       });
     }
 
-    stop(id) {
+    stop(id, fadeSec) {
       const canon = migrateSoundId(id) || id;
       const stop = this.active.get(canon);
       if (!stop) return;
-      stop();
+      stop(fadeSec);
       this.active.delete(canon);
     }
 
@@ -573,11 +649,11 @@ function filt(ctx, type, f, q, to) {
       const to = this.sfxGain;
       if (!to) return;
       if (kind === 'pop') {
-        voice({ ctx, add() {} }, to, { when: now, f: hz(84), attack: 0.006, dur: 0.12, peak: 0.12 });
-        voice({ ctx, add() {} }, to, { when: now + 0.05, f: hz(88), attack: 0.006, dur: 0.14, peak: 0.07 });
+        voice({ ctx, add() {} }, to, { when: now, f: this.hz(84), attack: 0.006, dur: 0.12, peak: 0.12 });
+        voice({ ctx, add() {} }, to, { when: now + 0.05, f: this.hz(88), attack: 0.006, dur: 0.14, peak: 0.07 });
       } else if (kind === 'sparkle') {
         [84, 88, 91].forEach((m, i) => {
-          voice({ ctx, add() {} }, to, { when: now + i * 0.09, f: hz(m), attack: 0.006, dur: 0.22, peak: 0.08 });
+          voice({ ctx, add() {} }, to, { when: now + i * 0.09, f: this.hz(m), attack: 0.006, dur: 0.22, peak: 0.08 });
         });
       } else if (kind === 'rustle') {
         const src = ctx.createBufferSource();
@@ -608,6 +684,13 @@ function filt(ctx, type, f, q, to) {
   window.CB_SOUNDS = SOUNDS;
   window.CB_SOUND_GROUPS = GROUP_LABELS;
   window.CB_SOUND_ALIASES = ALIASES;
+  window.CB_PITCHED = PITCHED;
+  window.CB_UNTUNED = UNTUNED;
   window.CB_migrateSoundId = migrateSoundId;
+  window.CB_normalizeTuning = normalizeTuning;
+  window.CB_a4 = a4Of;
+  window.CB_hz = hzOf;
+  window.CB_rootHz = rootOf;
+  window.CB_centerHz = centerOf;
   window.CBSound = SoundEngine;
 })();

@@ -122,6 +122,8 @@ main{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:16px 14p
 }
 .gallery-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px;position:relative}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
+#tuning{margin-top:4px}
+#tuningNote{margin:6px 0 0}
 .seg button{border:1.5px solid var(--line);background:var(--card);border-radius:999px;padding:7px 12px;font-family:var(--serif)}
 .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:12px;position:relative}
 .thumb{

@@ -24,6 +24,7 @@
     layer: true,
     sfx: false,
     sfxVolume: 0.35,
+    tuning: '432',
     tool: 'fill',
     hsl: [200, 80, 55],
     minted: {},
@@ -42,6 +43,7 @@
       if (!v || v.v !== 1) return null;
       v.sfx = v.sfx === true;
       v.sfxVolume = clampVol(v.sfxVolume, 0.35);
+      v.tuning = v.tuning === '528' ? '528' : '432';
       if (Array.isArray(v.sounds) && window.CB_migrateSoundId) {
         v.sounds = v.sounds.map((id) => window.CB_migrateSoundId(id)).filter(Boolean);
       }
@@ -334,6 +336,7 @@
     if (!engine) engine = new window.CBSound();
     engine.setVolume(state.volume);
     engine.setSfx(!!state.sfx, state.sfxVolume);
+    engine.setTuning(state.tuning === '528' ? '528' : '432');
     return engine;
   }
   function tap(kind) {
@@ -349,6 +352,20 @@
     const sl = $('#sfxVolume');
     if (sl) sl.value = Math.round((state.sfxVolume == null ? 0.35 : state.sfxVolume) * 100);
     if (engine) engine.setSfx(!!state.sfx, state.sfxVolume);
+  }
+  function syncTuning() {
+    const mode = state.tuning === '528' ? '528' : '432';
+    state.tuning = mode;
+    document.querySelectorAll('[data-tuning]').forEach((b) => {
+      b.setAttribute('aria-pressed', b.dataset.tuning === mode ? 'true' : 'false');
+    });
+    const note = $('#tuningNote');
+    if (note) {
+      note.textContent = mode === '528'
+        ? 'Tuned to 528 Hz. The key note is 528.'
+        : 'Tuned to 432 Hz. A is 432.';
+    }
+    if (engine) engine.setTuning(mode);
   }
   function buildSounds() {
     const box = $('#sounds');
@@ -539,6 +556,7 @@
         layer: state.layer,
         sfx: !!state.sfx,
         sfxVolume: state.sfxVolume,
+        tuning: state.tuning === '528' ? '528' : '432',
         minted: state.minted,
         pageId: state.pageId,
         hsl: state.hsl,
@@ -583,6 +601,7 @@
     state.layer = s.layer !== false;
     state.sfx = s.sfx === true;
     state.sfxVolume = clampVol(s.sfxVolume, 0.35);
+    state.tuning = s.tuning === '528' ? '528' : '432';
     if (Array.isArray(s.sounds) && window.CB_migrateSoundId) {
       state.sounds = s.sounds.map((id) => window.CB_migrateSoundId(id)).filter(Boolean);
     }
@@ -593,6 +612,7 @@
     state.filter = s.filter || 'all';
     $('#volume').value = Math.round(state.volume * 100);
     syncSfx();
+    syncTuning();
     $('#mixToggle').setAttribute('aria-pressed', state.layer ? 'true' : 'false');
     $('#mixToggle').textContent = state.layer ? 'Mixing on' : 'One at a time';
     if (engine) engine.setVolume(state.volume);
@@ -725,6 +745,13 @@
       save();
       if (engine) engine.setSfx(!!state.sfx, state.sfxVolume);
     });
+    document.querySelectorAll('[data-tuning]').forEach((b) => {
+      b.onclick = () => {
+        state.tuning = b.dataset.tuning === '528' ? '528' : '432';
+        save();
+        syncTuning();
+      };
+    });
     const bgPick = document.createElement('input');
     bgPick.type = 'color';
     bgPick.id = 'bgCustom';
@@ -749,6 +776,7 @@
   bind();
   $('#volume').value = Math.round(state.volume * 100);
   syncSfx();
+  syncTuning();
   applyTheme();
   renderRecent();
   setTool(state.tool === 'erase' ? 'erase' : 'fill');

@@ -117,6 +117,12 @@
           <div class="kicker">Music box</div>
           <h3>Soft sounds</h3>
           <div id="sounds"></div>
+          <div class="kicker" style="margin-top:10px">Tuning</div>
+          <div class="seg" id="tuning" role="group" aria-label="Tuning">
+            <button type="button" data-tuning="432" aria-pressed="true">432 Hz</button>
+            <button type="button" data-tuning="528" aria-pressed="false">528 Hz</button>
+          </div>
+          <p class="small" id="tuningNote">Tuned to 432 Hz. A is 432.</p>
           <div class="row" style="margin-top:8px">
             <button class="tool" id="mixToggle" type="button" aria-pressed="true">Mixing on</button>
             <button class="tool" id="stopSounds" type="button">Stop all</button>
