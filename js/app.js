@@ -22,6 +22,8 @@
     customBg: null,
     volume: 0.6,
     layer: true,
+    sfx: false,
+    sfxVolume: 0.35,
     tool: 'fill',
     hsl: [200, 80, 55],
     minted: {},
@@ -31,10 +33,18 @@
   const playing = new Set();
   let toastTimer = 0;
 
+  function clampVol(n, fallback) {
+    return typeof n === 'number' && n >= 0 && n <= 1 ? n : fallback;
+  }
   function load() {
     try {
       const v = JSON.parse(localStorage.getItem(KEY));
       if (!v || v.v !== 1) return null;
+      v.sfx = v.sfx === true;
+      v.sfxVolume = clampVol(v.sfxVolume, 0.35);
+      if (Array.isArray(v.sounds) && window.CB_migrateSoundId) {
+        v.sounds = v.sounds.map((id) => window.CB_migrateSoundId(id)).filter(Boolean);
+      }
       return v;
     } catch (e) { return null; }
   }
@@ -201,7 +211,7 @@
     const next = cur.slice();
     next[idx] = val;
     commit(next);
-    if (val) pushRecent(val);
+    if (val) { pushRecent(val); tap('pop'); }
   }
 
   function undo() {
@@ -241,6 +251,7 @@
       return c;
     });
     commit(next);
+    tap('sparkle');
     toast('A fresh palette ✦');
   }
 
@@ -319,35 +330,71 @@
     magic.onclick = () => $('#magicPicker').click();
     box.append(magic);
   }
+  function audio() {
+    if (!engine) engine = new window.CBSound();
+    engine.setVolume(state.volume);
+    engine.setSfx(!!state.sfx, state.sfxVolume);
+    return engine;
+  }
+  function tap(kind) {
+    if (!state.sfx) return;
+    try { audio().ui(kind); }
+    catch (e) { /* coloring still works if this window has no audio */ }
+  }
+  function syncSfx() {
+    const b = $('#sfxToggle');
+    if (!b) return;
+    b.setAttribute('aria-pressed', state.sfx ? 'true' : 'false');
+    b.textContent = state.sfx ? 'Crayon taps on' : 'Crayon taps off';
+    const sl = $('#sfxVolume');
+    if (sl) sl.value = Math.round((state.sfxVolume == null ? 0.35 : state.sfxVolume) * 100);
+    if (engine) engine.setSfx(!!state.sfx, state.sfxVolume);
+  }
   function buildSounds() {
     const box = $('#sounds');
+    let row = null;
+    let last = '';
     window.CB_SOUNDS.forEach((s) => {
+      if (s.group !== last) {
+        const group = document.createElement('div');
+        group.className = 'snd-group';
+        const kicker = document.createElement('div');
+        kicker.className = 'kicker';
+        kicker.textContent = (window.CB_SOUND_GROUPS && window.CB_SOUND_GROUPS[s.group]) || '';
+        row = document.createElement('div');
+        row.className = 'sounds';
+        group.append(kicker, row);
+        box.append(group);
+        last = s.group;
+      }
       const b = document.createElement('button');
       b.type = 'button';
+      b.className = 'snd';
       b.dataset.sound = s.id;
-      b.textContent = s.label;
+      b.innerHTML = '<span class="snd-ico" aria-hidden="true">' + s.emoji + '</span><span class="snd-name">' + s.label + '</span>';
+      b.setAttribute('aria-label', s.label);
       b.setAttribute('aria-pressed', 'false');
       b.onclick = () => toggleSound(s.id);
-      box.append(b);
+      row.append(b);
     });
   }
   function toggleSound(id) {
     try {
-      if (!engine) engine = new window.CBSound();
-      engine.setVolume(state.volume);
-      const btn = document.querySelector('[data-sound="' + id + '"]');
-      if (playing.has(id)) {
-        engine.stop(id);
-        playing.delete(id);
-        btn.setAttribute('aria-pressed', 'false');
+      const eng = audio();
+      const canon = (window.CB_migrateSoundId && window.CB_migrateSoundId(id)) || id;
+      const btn = document.querySelector('[data-sound="' + canon + '"]');
+      if (playing.has(canon)) {
+        eng.stop(canon);
+        playing.delete(canon);
+        if (btn) btn.setAttribute('aria-pressed', 'false');
       } else {
         if (!state.layer) {
-          playing.forEach((x) => { engine.stop(x); const o = document.querySelector('[data-sound="' + x + '"]'); if (o) o.setAttribute('aria-pressed', 'false'); });
+          playing.forEach((x) => { eng.stop(x); const o = document.querySelector('[data-sound="' + x + '"]'); if (o) o.setAttribute('aria-pressed', 'false'); });
           playing.clear();
         }
-        engine.start(id);
-        playing.add(id);
-        btn.setAttribute('aria-pressed', 'true');
+        eng.start(canon);
+        playing.add(canon);
+        if (btn) btn.setAttribute('aria-pressed', 'true');
       }
       $('#audioErr').classList.add('hidden');
       $('#soundQuick').setAttribute('aria-pressed', playing.size ? 'true' : 'false');
@@ -394,6 +441,7 @@
     const go = () => { state.pageId = id; save(); draw(); setScreen('color'); };
     const turning = document.body.dataset.screen === 'color' && id !== state.pageId && !reduceMotion;
     if (!turning) { go(); return; }
+    tap('rustle');
     sheet.classList.remove('turn-next', 'turn-prev');
     void sheet.offsetWidth;
     sheet.classList.add(dir < 0 ? 'turn-prev' : 'turn-next');
@@ -489,6 +537,8 @@
         customBg: state.customBg,
         volume: state.volume,
         layer: state.layer,
+        sfx: !!state.sfx,
+        sfxVolume: state.sfxVolume,
         minted: state.minted,
         pageId: state.pageId,
         hsl: state.hsl,
@@ -531,12 +581,18 @@
     state.customBg = s.customBg || null;
     state.volume = typeof s.volume === 'number' ? s.volume : 0.6;
     state.layer = s.layer !== false;
+    state.sfx = s.sfx === true;
+    state.sfxVolume = clampVol(s.sfxVolume, 0.35);
+    if (Array.isArray(s.sounds) && window.CB_migrateSoundId) {
+      state.sounds = s.sounds.map((id) => window.CB_migrateSoundId(id)).filter(Boolean);
+    }
     state.minted = s.minted || {};
     state.pageId = s.pageId || PAGES[0].id;
     state.hsl = s.hsl || [200, 80, 55];
     state.tool = s.tool || 'fill';
     state.filter = s.filter || 'all';
     $('#volume').value = Math.round(state.volume * 100);
+    syncSfx();
     $('#mixToggle').setAttribute('aria-pressed', state.layer ? 'true' : 'false');
     $('#mixToggle').textContent = state.layer ? 'Mixing on' : 'One at a time';
     if (engine) engine.setVolume(state.volume);
@@ -658,6 +714,17 @@
       save();
       if (engine) engine.setVolume(state.volume);
     });
+    $('#sfxToggle').onclick = () => {
+      state.sfx = !state.sfx;
+      save();
+      syncSfx();
+      if (state.sfx) tap('pop');
+    };
+    $('#sfxVolume').addEventListener('input', (e) => {
+      state.sfxVolume = Number(e.target.value) / 100;
+      save();
+      if (engine) engine.setSfx(!!state.sfx, state.sfxVolume);
+    });
     const bgPick = document.createElement('input');
     bgPick.type = 'color';
     bgPick.id = 'bgCustom';
@@ -681,6 +748,7 @@
   buildThemes();
   bind();
   $('#volume').value = Math.round(state.volume * 100);
+  syncSfx();
   applyTheme();
   renderRecent();
   setTool(state.tool === 'erase' ? 'erase' : 'fill');

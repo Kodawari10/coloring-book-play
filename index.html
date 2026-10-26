@@ -115,13 +115,19 @@
 
         <div class="card" id="soundCard">
           <div class="kicker">Music box</div>
-          <h3>Relaxing sounds</h3>
-          <div class="sounds" id="sounds"></div>
+          <h3>Soft sounds</h3>
+          <div id="sounds"></div>
           <div class="row" style="margin-top:8px">
             <button class="tool" id="mixToggle" type="button" aria-pressed="true">Mixing on</button>
             <button class="tool" id="stopSounds" type="button">Stop all</button>
             <label class="slider" style="flex:1;min-width:140px">Volume
               <input id="volume" type="range" min="0" max="100" value="60" aria-label="Volume">
+            </label>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <button class="tool" id="sfxToggle" type="button" aria-pressed="false">Crayon taps off</button>
+            <label class="slider" style="flex:1;min-width:120px">Taps
+              <input id="sfxVolume" type="range" min="0" max="100" value="35" aria-label="Crayon tap volume">
             </label>
           </div>
           <p class="small hidden" id="audioErr">Sound could not start in this window.</p>
