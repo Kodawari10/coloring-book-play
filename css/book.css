@@ -171,7 +171,9 @@ main{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:16px 14p
 .thumb .star{position:absolute;right:8px;top:4px;font-size:12px}
 .thumb .num{font-family:var(--serif);font-size:12px;color:#8a6078;letter-spacing:.04em}
 .stage.quiet .tools{opacity:.5}
-.spread{display:flex;align-items:stretch;min-width:0;filter:drop-shadow(0 16px 28px rgba(70,40,60,.16))}
+.spread{display:block;min-width:0;filter:drop-shadow(0 16px 28px rgba(70,40,60,.16))}
+#leafRight,.gutter{display:none}
+#leafLeft{display:flex;width:100%;border-radius:18px}
 .gutter{
   width:26px;flex:none;
   background:
@@ -386,6 +388,60 @@ input[type="range"]{width:100%;accent-color:var(--accent)}
   .leaf.active{display:flex}
   .contents-page{max-height:none}
 }
+/* One big coloring page. Tools stay thin; sounds and sliders sit behind More. */
+body[data-coloring="1"]{
+  display:flex;flex-direction:column;height:100dvh;min-height:100dvh;overflow:hidden;
+}
+body[data-coloring="1"] .top{flex:none;padding:6px 10px}
+body[data-coloring="1"] .brand small{display:none}
+body[data-coloring="1"] .brand b{font-size:18px}
+body[data-coloring="1"] main{
+  flex:1;min-height:0;max-width:none;width:100%;margin:0;
+  padding:4px 8px 6px;display:flex;flex-direction:column;
+}
+body[data-coloring="1"] #screen-book{flex:1;min-height:0;display:flex;flex-direction:column}
+body[data-coloring="1"] .studio{
+  flex:1;min-height:0;width:100%;display:flex;flex-direction:column;flex-wrap:nowrap;
+  align-items:stretch;gap:6px;
+}
+body[data-coloring="1"] .stage{
+  flex:1;min-height:0;width:100%;max-width:none;display:flex;flex-direction:column;align-items:center;
+}
+body[data-coloring="1"] .tools{
+  flex:none;width:100%;max-width:100%;flex-wrap:nowrap;overflow-x:auto;gap:6px;margin-bottom:0;
+}
+body[data-coloring="1"] .tool{padding:6px 8px;font-size:13px;white-space:nowrap;min-height:36px}
+body[data-coloring="1"] .spread{
+  flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;filter:none;
+}
+body[data-coloring="1"] #leafLeft{
+  flex:none;width:auto;height:auto;max-width:100%;max-height:100%;border-radius:16px;position:relative;
+}
+body[data-coloring="1"] .folio-title,
+body[data-coloring="1"] .folio-foot{
+  position:absolute;left:0;right:0;z-index:2;pointer-events:none;text-shadow:0 1px 0 #fff;
+}
+body[data-coloring="1"] .folio-title{top:1px;font-size:13px;padding:2px 8px 0}
+body[data-coloring="1"] .folio-foot{bottom:0;font-size:12px;padding:0 8px 2px}
+body[data-coloring="1"] .leaf .sheet{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:transparent;
+}
+body[data-coloring="1"] .pager{flex:none;width:100%;margin-top:0;justify-content:center}
+body[data-coloring="1"] .pager .name{font-size:15px}
+body[data-coloring="1"] .meta{font-size:12px}
+body[data-coloring="1"] .stationery{flex:none;width:100%;max-width:none}
+body[data-coloring="1"] .tin{padding:4px 8px 2px}
+body[data-coloring="1"] .crayon{height:58px;width:32px}
+body[data-coloring="1"] .crayons{padding:4px 2px 6px}
+body[data-coloring="1"]:not(.supplies-open) .stationery .card,
+body[data-coloring="1"]:not(.supplies-open) .tin > :not(#crayons){display:none}
+body[data-coloring="1"].supplies-open .stationery{
+  position:fixed;z-index:8;left:8px;right:8px;bottom:8px;
+  max-height:min(72dvh, 560px);overflow:auto;
+  background:rgba(255,252,248,.98);border-radius:16px;box-shadow:var(--shadow);padding:8px;
+}
+body[data-coloring="1"] .doodle{opacity:.25}
+
 @media (prefers-reduced-motion: reduce){
   .sheet.turn-next,.sheet.turn-prev,.leaf.turn-next,.leaf.turn-prev,.mascot-arm,.doodle,.sheet.done:before{animation:none}
   .doodle{display:none}

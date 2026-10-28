@@ -15,6 +15,9 @@
   const contentsPage = $('#contentsPage');
   const backPage = $('#backPage');
   const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let zoom = 1;
+  let panX = 0;
+  let panY = 0;
 
   const state = load() || {
     v: 1,
@@ -186,16 +189,48 @@
     });
   }
 
+  function applyZoom() {
+    if (zoom === 1 && panX === 0 && panY === 0) sheet.style.transform = '';
+    else sheet.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+    sheet.style.transformOrigin = 'center center';
+  }
+  function setZoom(next) {
+    const clamped = Math.min(3, Math.max(1, Math.round(next * 4) / 4));
+    zoom = clamped < 1.05 ? 1 : clamped;
+    if (zoom === 1) { panX = 0; panY = 0; }
+    applyZoom();
+    draw();
+  }
+  function fitPage() {
+    const leaf = $('#leafLeft');
+    if (document.body.dataset.coloring !== '1') {
+      leaf.style.width = '';
+      leaf.style.height = '';
+      canvas.style.width = '';
+      canvas.style.height = '';
+      return;
+    }
+    const spread = $('#spread');
+    const availW = spread.clientWidth;
+    const availH = spread.clientHeight;
+    if (availW < 40 || availH < 40) return;
+    const size = Math.floor(Math.min(availW, availH));
+    leaf.style.width = size + 'px';
+    leaf.style.height = size + 'px';
+    const inner = Math.max(120, size - 28);
+    canvas.style.width = inner + 'px';
+    canvas.style.height = inner + 'px';
+  }
   function draw() {
     const page = drawingNow();
     if (!page) return;
     const fills = fillsOf(page);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const css = Math.max(240, Math.floor(canvas.clientWidth || sheet.clientWidth || 360));
-    const px = Math.round(css * dpr);
+    const css = Math.max(120, Math.floor(canvas.clientWidth || sheet.clientWidth || 360));
+    const px = Math.min(4096, Math.round(css * dpr * zoom));
     if (canvas.width !== px) { canvas.width = px; canvas.height = px; }
     const ctx = canvas.getContext('2d');
-    if (ctx) DRAW.drawPage(ctx, page, fills, px, 3);
+    if (ctx) DRAW.drawPage(ctx, page, fills, px, 2.6);
     $('#pageName').textContent = page.name;
     const shapes = page.regions.filter((r) => !r.line).length;
     const done = page.regions.filter((r, i) => !r.line && fills[i]).length;
@@ -595,27 +630,33 @@
   }
   function renderBook() {
     const active = state.leaf || 0;
-    const left = active % 2 === 0 ? active : active - 1;
-    paintLeaf($('#leafLeft'), left, active);
-    paintLeaf($('#leafRight'), left + 1, active);
+    zoom = 1;
+    panX = 0;
+    panY = 0;
+    applyZoom();
+    paintLeaf($('#leafLeft'), active, active);
     const folio = folioAt(active);
+    document.body.dataset.coloring = folio.type === 'drawing' ? '1' : '0';
     $('.stage').classList.toggle('quiet', folio.type !== 'drawing');
     if (folio.type === 'drawing') {
       $('#pageName').textContent = folio.name;
+      fitPage();
       draw();
     } else if (folio.type === 'contents') {
       $('#pageName').textContent = 'Contents';
       $('#pageMeta').textContent = PAGES.length + ' pictures, one on each page';
+      fitPage();
       renderThumbs();
     } else {
       $('#pageName').textContent = 'The end';
       $('#pageMeta').textContent = 'Back cover';
+      fitPage();
     }
     $('#pageNext').disabled = active >= PAGES.length + 1;
     requestAnimationFrame(() => {
       if (document.body.dataset.screen !== 'book') return;
+      fitPage();
       if (drawingNow()) draw();
-      paintFacing();
     });
   }
 
@@ -857,24 +898,61 @@
       b.onclick = () => { state.filter = b.dataset.filter; save(); renderThumbs(); };
     });
     let swipe = null;
+    const pointers = new Map();
+    let pinch = null;
     $('#spread').addEventListener('pointerdown', (e) => {
       if (e.button != null && e.button !== 0) return;
       if (e.target.closest('button, a, input, label, .seg')) return;
-      swipe = { x: e.clientX, y: e.clientY, t: e.target };
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      swipe = { x: e.clientX, y: e.clientY, t: e.target, panX: panX, panY: panY, zoom: zoom };
+      if (pointers.size === 2) {
+        const pts = [...pointers.values()];
+        pinch = { dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1, zoom: zoom };
+      }
+    });
+    $('#spread').addEventListener('pointermove', (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size >= 2 && pinch) {
+        const pts = [...pointers.values()];
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        const next = Math.min(3, Math.max(1, pinch.zoom * (dist / pinch.dist)));
+        zoom = next < 1.05 ? 1 : next;
+        if (zoom === 1) { panX = 0; panY = 0; }
+        applyZoom();
+        return;
+      }
+      if (zoom > 1 && swipe && pointers.size === 1) {
+        panX = swipe.panX + (e.clientX - swipe.x);
+        panY = swipe.panY + (e.clientY - swipe.y);
+        applyZoom();
+      }
     });
     $('#spread').addEventListener('pointerup', (e) => {
-      if (!swipe) return;
-      const dx = e.clientX - swipe.x;
-      const dy = e.clientY - swipe.y;
-      const started = swipe.t;
+      const start = swipe;
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinch = null;
+      if (pointers.size > 0) return;
       swipe = null;
-      if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) {
+      if (!start) return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      const pinched = Math.abs(zoom - start.zoom) > 0.01;
+      if (pinched) { draw(); return; }
+      if (zoom <= 1 && Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) {
         step(dx < 0 ? 1 : -1);
         return;
       }
-      if (started && started.id === 'pageCanvas' && Math.hypot(dx, dy) < 14) onPointerDown(e);
+      if (start.t && start.t.id === 'pageCanvas' && Math.hypot(dx, dy) < 14) onPointerDown(e);
     });
-    $('#spread').addEventListener('pointercancel', () => { swipe = null; });
+    $('#spread').addEventListener('pointercancel', () => { swipe = null; pointers.clear(); pinch = null; });
+    $('#zoomIn').onclick = () => setZoom(zoom + 0.5);
+    $('#zoomOut').onclick = () => setZoom(zoom - 0.5);
+    $('#suppliesBtn').onclick = () => {
+      const open = document.body.classList.toggle('supplies-open');
+      $('#suppliesBtn').setAttribute('aria-pressed', open ? 'true' : 'false');
+      $('#suppliesBtn').textContent = open ? 'Close' : 'More';
+    };
     $('#tool-fill').onclick = () => setTool('fill');
     $('#tool-erase').onclick = () => setTool('erase');
     $('#tool-undo').onclick = undo;
@@ -944,8 +1022,8 @@
     });
     window.addEventListener('resize', () => {
       if (document.body.dataset.screen !== 'book') return;
+      fitPage();
       if (drawingNow()) draw();
-      paintFacing();
     });
   }
 
