@@ -38,6 +38,7 @@
     leaf: 0,
   };
   const hist = {};
+  const future = {};
   let engine = null;
   const playing = new Set();
   let toastTimer = 0;
@@ -238,6 +239,7 @@
     $('#pageMeta').textContent = 'Page ' + page.number + ' · ' + kind + ' · ' + done + ' of ' + shapes + ' shapes colored';
     sheet.classList.toggle('erase', state.tool === 'erase');
     paintCrayon();
+    syncHistory();
   }
 
   function paintCover() {
@@ -268,12 +270,19 @@
     clearTimeout(celebrate.t);
     celebrate.t = setTimeout(() => sheet.classList.remove('done'), 1400);
   }
+  function syncHistory() {
+    const page = drawingNow();
+    const id = page ? page.id : '';
+    $('#tool-undo').disabled = !(id && hist[id] && hist[id].length);
+    $('#tool-redo').disabled = !(id && future[id] && future[id].length);
+  }
   function commit(next) {
     const page = drawingNow();
     if (!page) return;
     const cur = fillsOf(page);
     const before = filledCount(page, cur);
     hist[page.id] = (hist[page.id] || []).concat([cur]).slice(-80);
+    future[page.id] = [];
     state.fills[page.id] = next;
     const shapes = page.regions.filter((r) => !r.line).length;
     const after = filledCount(page, next);
@@ -312,7 +321,19 @@
     const id = page.id;
     const h = hist[id] || [];
     if (!h.length) return;
+    future[id] = (future[id] || []).concat([fillsOf(page)]).slice(-80);
     state.fills[id] = h.pop();
+    save();
+    draw();
+  }
+  function redo() {
+    const page = drawingNow();
+    if (!page) return;
+    const id = page.id;
+    const f = future[id] || [];
+    if (!f.length) return;
+    hist[id] = (hist[id] || []).concat([fillsOf(page)]).slice(-80);
+    state.fills[id] = f.pop();
     save();
     draw();
   }
@@ -653,6 +674,7 @@
       fitPage();
     }
     $('#pageNext').disabled = active >= PAGES.length + 1;
+    syncHistory();
     requestAnimationFrame(() => {
       if (document.body.dataset.screen !== 'book') return;
       fitPage();
@@ -956,6 +978,7 @@
     $('#tool-fill').onclick = () => setTool('fill');
     $('#tool-erase').onclick = () => setTool('erase');
     $('#tool-undo').onclick = undo;
+    $('#tool-redo').onclick = redo;
     $('#tool-clear').onclick = clearPage;
     $('#tool-surprise').onclick = surprise;
     $('#btn-png').onclick = () => { downloadPNG(); };
@@ -1014,7 +1037,12 @@
       const inBook = document.body.dataset.screen === 'book';
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && inBook) {
         e.preventDefault();
-        undo();
+        if (e.shiftKey) redo();
+        else undo();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y' && inBook) {
+        e.preventDefault();
+        redo();
       }
       if (!inBook) return;
       if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); step(1); }
