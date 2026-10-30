@@ -1,7 +1,7 @@
-/* Coloring Book drawings: mandalas and kawaii animals.
+/* Coloring Book drawings: mandalas and mochi animals.
    Each region is a fillable path in a 400 by 400 picture. A region with `m`
-   is the same shape mirrored across the middle. `line` is a stroke (whiskers,
-   a smile). `base` keeps eyes ink-dark and sparkles white until you color them. */
+   is the same shape mirrored across the middle. `line` is a stroke (lashes,
+   a sleepy lid). `base` keeps eyes ink-dark and sparkles white until you color them. */
 (function () {
 'use strict';
 function hslToHex(h, s, l) {
@@ -257,230 +257,287 @@ function heart(cx, cy, s) {
 function spark(cx, cy, s) {
     return `M${cx} ${cy - s}Q${cx} ${cy} ${cx + s} ${cy}Q${cx} ${cy} ${cx} ${cy + s}Q${cx} ${cy} ${cx - s} ${cy}Q${cx} ${cy} ${cx} ${cy - s}Z`;
 }
-function deco(list) {
-    return list.map((v) => {
-        const [k, x, y, s] = v;
-        return R(k === "h" ? heart(x, y, s) : k === "s" ? spark(x, y, s) : starAt(x, y, 5, s, s * 0.5), { g: k === "h" ? "heart" : k === "s" ? "spark" : "star" });
-    });
-}
 function omegaMouth(cx, cy, w) {
     return `M${cx - w} ${cy}C${cx - w * 0.55} ${cy + w * 0.9} ${cx - w * 0.2} ${cy + w * 0.9} ${cx} ${cy + w * 0.2}C${cx + w * 0.2} ${cy + w * 0.9} ${cx + w * 0.55} ${cy + w * 0.9} ${cx + w} ${cy}C${cx + w * 0.45} ${cy + w * 0.42} ${cx + w * 0.16} ${cy + w * 0.48} ${cx} ${cy + w * 0.32}C${cx - w * 0.16} ${cy + w * 0.48} ${cx - w * 0.45} ${cy + w * 0.42} ${cx - w} ${cy}Z`;
 }
-function face(y, dx, er, opt) {
-    const cx = opt?.cx ?? 200;
+function uMouth(cx, cy, w) {
+    return `M${cx - w} ${cy}C${cx - w} ${cy + w * 1.35} ${cx + w} ${cy + w * 1.35} ${cx + w} ${cy}C${cx + w * 0.45} ${cy + w * 0.62} ${cx - w * 0.45} ${cy + w * 0.62} ${cx - w} ${cy}Z`;
+}
+function smileMouth(cx, cy, w) {
+    return `M${cx - w} ${cy}Q${cx} ${cy + w * 1.2} ${cx + w} ${cy}Q${cx} ${cy + w * 0.42} ${cx - w} ${cy}Z`;
+}
+function lashLine(cx, y, dx, er, sleepy) {
+    let d = "";
+    for (const s of [-1, 1]) {
+        const ex = cx + s * dx;
+        d += `M${fx(ex - er * 0.72)} ${fx(y - er * 0.9)}Q${fx(ex - er * 0.15)} ${fx(y - er * 1.18)} ${fx(ex + er * 0.18)} ${fx(y - er * 0.86)}`;
+        d += `M${fx(ex + er * 0.12)} ${fx(y - er)}Q${fx(ex + er * 0.42)} ${fx(y - er * 1.2)} ${fx(ex + er * 0.74)} ${fx(y - er * 0.88)}`;
+        if (sleepy)
+            d += `M${fx(ex - er * 0.75)} ${fx(y + er * 0.2)}Q${fx(ex)} ${fx(y + er * 0.58)} ${fx(ex + er * 0.75)} ${fx(y + er * 0.2)}`;
+    }
+    return d;
+}
+/* Low, wide eyes, cheek ovals, and a tiny mouth. One soft highlight, two on a few friends. */
+function kawaiiFace(opt) {
+    const y = opt.ey ?? 234;
+    const dx = opt.dx ?? 56;
+    const er = opt.er ?? 32;
+    const cx = opt.cx ?? 200;
+    const mouth = opt.mouth ?? "w";
     const o = [];
     for (const s of [-1, 1]) {
         const ex = cx + s * dx;
-        o.push(R(E(ex + s * er * 0.95, y + er * 1.2, Math.max(16, er * 0.74), Math.max(12, er * 0.46)), { g: "blush" }));
+        o.push(R(E(ex + s * (er + 10), y + er * 0.7, 32, 18), { g: "blush" }));
         o.push(R(E(ex, y, er * 0.92, er), { base: "ink", g: "eye" }));
-        o.push(R(Cc(ex + er * 0.28, y - er * 0.34, Math.max(9, er * 0.36)), { base: "white", g: "hl" }));
-        o.push(R(Cc(ex - er * 0.22, y + er * 0.3, Math.max(7, er * 0.24)), { base: "white", g: "hl2" }));
+        if (opt.sleepy)
+            o.push(R(E(ex, y - er * 0.2, er, er * 0.5), { g: "lid" }));
+        const hy = opt.sleepy ? y + er * 0.42 : y - er * 0.3;
+        o.push(R(Cc(ex + er * 0.22, hy, Math.max(13, er * 0.42)), { base: "white", g: "hl" }));
+        if (opt.dots === 2 && !opt.sleepy)
+            o.push(R(Cc(ex - er * 0.24, y + er * 0.28, 11), { base: "white", g: "hl2" }));
     }
-    const my = y + er * 1.7;
-    if ((opt?.mouth ?? "w") !== "none")
-        o.push(R(omegaMouth(cx, my, opt?.mouth === "smile" ? 20 : 17), { g: "mouth" }));
-    o.push(L(`M${cx - 20} ${my + 16}q10 7 20 0q10 7 20 0`));
+    o.push(L(lashLine(cx, y, dx, er, !!opt.sleepy)));
+    if (mouth !== "none") {
+        const my = y + er * 1.32;
+        const w = mouth === "smile" ? 24 : 20;
+        const d = mouth === "u" ? uMouth(cx, my, 18) : mouth === "smile" ? smileMouth(cx, my, w) : omegaMouth(cx, my, w);
+        o.push(R(d, { g: "mouth" }));
+        if (opt.tongue)
+            o.push(R(E(cx, my + w * 0.48, 16, 12), { g: "tongue" }));
+    }
     return o;
+}
+function floats(list) {
+    const spec = list || [["h", 46, 44, 18], ["s", 352, 52, 16]];
+    return spec.map((v) => {
+        const [k, x, y, s] = v;
+        return R(k === "h" ? heart(x, y, s) : spark(x, y, s), { g: k === "h" ? "heart" : "spark" });
+    });
 }
 function pointyEars() {
-    return [
-        ...pair("M124 146C102 64 128 36 152 44C174 52 180 108 172 146Z", { g: "ear" }),
-        ...pair("M134 136C120 78 136 58 150 62C164 66 168 104 162 130Z", { g: "inEar" }),
-    ];
+    return pair("M126 164C104 64 140 32 164 50C184 64 178 128 166 168Z", { g: "ear" });
 }
 function roundEars(x, y, r) {
-    return [
-        ...pair(Cc(x, y, r), { g: "ear" }),
-        ...pair(Cc(x - 4, y - 6, Math.max(12, r * 0.46)), { g: "inEar" }),
-    ];
+    return pair(Cc(x, y, r), { g: "ear" });
 }
 function longEars() {
-    return [
-        ...pair(E(148, 78, 22, 62), { g: "ear" }),
-        ...pair(E(148, 84, 11, 44), { g: "inEar" }),
-    ];
+    return pair(E(154, 84, 26, 74), { g: "ear" });
 }
 function floppyEars() {
-    return [
-        ...pair("M156 150C108 162 72 214 102 246C138 272 176 214 166 152Z", { g: "ear" }),
-        ...pair("M150 158C118 170 96 210 118 230C140 246 164 204 158 160Z", { g: "inEar" }),
-    ];
-}
-/* Head is about three fifths of the little figure. Body, paws, and props stay chubby and closed. */
-function chibi(p) {
-    const o = [B(), R(p.ground || "M0 358Q200 338 400 358V400H0Z", { g: p.gg || "ground" })];
-    o.push(...deco(p.deco || [["h", 46, 42, 13], ["s", 354, 48, 12], ["t", 32, 236, 11]]));
-    if (p.back) o.push(...p.back);
-    o.push(R(E(200, p.by || 308, p.brx || 56, p.bry || 40), { g: "body" }));
-    o.push(R(E(200, (p.by || 308) + 8, (p.brx || 56) * 0.55, (p.bry || 40) * 0.62), { g: "belly" }));
-    o.push(...pair(E(166, p.py || 350, 22, 13), { g: "paw" }));
-    if (p.mid) o.push(...p.mid);
-    o.push(R(E(200, 172, p.hrx || 108, p.hry || 80), { g: "head" }));
-    if (p.front) o.push(...p.front);
-    o.push(...face(p.fy || 156, p.dx || 40, p.er || 26, { mouth: p.mouth || "w" }));
-    if (p.top) o.push(...p.top);
-    return o;
-}
-function flowerAt(cx, cy, pr, stem) {
-    const r = stem ? [L(`M${cx} ${cy + pr}V385`)] : [];
-    for (let i = 0; i < 5; i++) {
-        const a = -Math.PI / 2 + (i * TAU) / 5;
-        r.push(R(Cc(cx + pr * 1.2 * Math.cos(a), cy + pr * 1.2 * Math.sin(a), pr), { g: "fpetal" }));
-    }
-    r.push(R(Cc(cx, cy, pr * 0.8), { g: "fcore" }));
-    return r;
+    return pair("M158 158C104 168 68 230 104 274C142 308 178 230 168 160Z", { g: "ear" });
 }
 function bow(x, y) {
     return [
-        R(`M${x} ${y}C${x - 14} ${y - 26} ${x - 36} ${y - 16} ${x - 30} ${y}C${x - 36} ${y + 16} ${x - 14} ${y + 26} ${x} ${y}Z`, { g: "bow" }),
-        R(`M${x} ${y}C${x + 14} ${y - 26} ${x + 36} ${y - 16} ${x + 30} ${y}C${x + 36} ${y + 16} ${x + 14} ${y + 26} ${x} ${y}Z`, { g: "bow" }),
-        R(Cc(x, y, 8), { g: "knot" }),
+        R(`M${x} ${y}C${x - 18} ${y - 34} ${x - 52} ${y - 20} ${x - 42} ${y}C${x - 52} ${y + 20} ${x - 18} ${y + 34} ${x} ${y}Z`, { g: "bow" }),
+        R(`M${x} ${y}C${x + 18} ${y - 34} ${x + 52} ${y - 20} ${x + 42} ${y}C${x + 52} ${y + 20} ${x + 18} ${y + 34} ${x} ${y}Z`, { g: "bow" }),
+        R(Cc(x, y, 12), { g: "knot" }),
     ];
+}
+function leafAt(cx, cy, s) {
+    return R(`M${cx} ${cy - s}C${cx + s * 1.15} ${cy - s * 0.15} ${cx + s * 0.85} ${cy + s * 0.9} ${cx} ${cy + s * 0.35}C${cx - s * 0.85} ${cy + s * 0.9} ${cx - s * 1.15} ${cy - s * 0.15} ${cx} ${cy - s}Z`, { g: "leaf" });
+}
+function flowerCrown(cx, cy) {
+    const o = [];
+    for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + (i * TAU) / 5;
+        o.push(R(Cc(Math.round(cx + Math.cos(a) * 26), Math.round(cy + Math.sin(a) * 18), 16), { g: "petal" }));
+    }
+    o.push(R(Cc(cx, cy, 13), { g: "core" }));
+    return o;
+}
+function softStar(cx, cy, r) {
+    const pts = [];
+    for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const rad = i % 2 === 0 ? r : r * 0.46;
+        pts.push([cx + Math.cos(a) * rad, cy + Math.sin(a) * rad]);
+    }
+    let d = "";
+    for (let i = 0; i < pts.length; i++) {
+        const prev = pts[(i + pts.length - 1) % pts.length];
+        const cur = pts[i];
+        const next = pts[(i + 1) % pts.length];
+        const start = [(prev[0] + cur[0]) / 2, (prev[1] + cur[1]) / 2];
+        const end = [(cur[0] + next[0]) / 2, (cur[1] + next[1]) / 2];
+        if (i === 0)
+            d += `M${fx(start[0])} ${fx(start[1])}`;
+        d += `Q${fx(cur[0])} ${fx(cur[1])} ${fx(end[0])} ${fx(end[1])}`;
+    }
+    return d + "Z";
+}
+function scarf() {
+    return [
+        R("M104 292C148 270 252 270 296 292C310 316 278 342 236 334C198 356 150 356 118 334C90 342 88 314 104 292Z", { g: "scarf" }),
+        R("M250 328C282 346 278 390 248 394C222 398 208 360 230 342Z", { g: "scarf" }),
+    ];
+}
+function strawberry(cx, cy) {
+    return [
+        R(`M${cx} ${cy - 42}C${cx - 32} ${cy - 8} ${cx - 30} ${cy + 36} ${cx} ${cy + 46}C${cx + 30} ${cy + 36} ${cx + 32} ${cy - 8} ${cx} ${cy - 42}Z`, { g: "berry" }),
+        R(`M${cx - 26} ${cy - 30}C${cx - 10} ${cy - 54} ${cx + 10} ${cy - 54} ${cx + 26} ${cy - 30}C${cx + 8} ${cy - 16} ${cx - 8} ${cy - 16} ${cx - 26} ${cy - 30}Z`, { g: "calyx" }),
+    ];
+}
+function hugHeart() {
+    return [
+        R(E(146, 300, 28, 22), { g: "paw" }),
+        R(E(254, 300, 28, 22), { g: "paw" }),
+        R(heart(200, 292, 36), { g: "heart" }),
+    ];
+}
+function zzz(x, y) {
+    const drop = 58;
+    return [
+        R(ellRot(x, y, 32, 12, 0), { g: "zzz" }),
+        R(ellRot(x, y + drop / 2, 44, 12, Math.atan2(drop, -64)), { g: "zzz" }),
+        R(ellRot(x, y + drop, 32, 12, 0), { g: "zzz" }),
+    ];
+}
+/* One dumpling: head and body are the same blob. Ears, a prop, and the face sit on it. */
+function mochi(p) {
+    const o = [B(), R(p.ground || "M0 352Q200 332 400 352V400H0Z", { g: p.gg || "ground" })];
+    o.push(...floats(p.floats));
+    if (p.back)
+        o.push(...p.back);
+    o.push(R(p.blob || E(200, 208, 136, 116), { g: "blob" }));
+    if (p.ears)
+        o.push(...p.ears);
+    if (p.front)
+        o.push(...p.front);
+    o.push(...kawaiiFace(p.face || {}));
+    if (p.top)
+        o.push(...p.top);
+    return o;
 }
 const B = () => R(BG, { g: "bg" });
 function cat() {
-    return chibi({
-        deco: [["h", 44, 40, 13], ["s", 356, 46, 12], ["t", 30, 230, 11], ["h", 364, 200, 10]],
-        back: [R("M292 292C338 250 370 274 350 314C332 346 300 328 292 292Z", { g: "tail" })],
-        front: [...pointyEars(), R(E(200, 186, 10, 7), { g: "nose" })],
-        top: [...bow(268, 98), R(heart(78, 168, 10), { g: "heart" })],
+    return mochi({
+        floats: [["h", 40, 40, 18], ["s", 356, 46, 16], ["h", 32, 286, 14]],
+        ears: pointyEars(),
+        front: [R(E(58, 176, 34, 28), { g: "paw" })],
+        face: { mouth: "w", dots: 2 },
+        top: [...bow(292, 118), R("M286 286C348 268 396 318 366 358C328 388 286 348 276 314Z", { g: "tail" })],
     });
 }
 function fish() {
-    const body = E(210, 196, 118, 96);
-    return [
-        B(), R("M0 352Q200 332 400 352V400H0Z", { g: "sand" }),
-        ...deco([["h", 42, 44, 12], ["s", 356, 50, 12], ["t", 36, 300, 10]]),
-        R(Cc(46, 110, 9), { g: "bub" }), R(Cc(338, 96, 8), { g: "bub" }), R(Cc(70, 64, 7), { g: "bub" }),
-        R("M100 196C52 140 24 160 34 198C24 236 54 252 100 196Z", { g: "tail" }),
-        R("M168 112C188 62 246 62 268 114Z", { g: "fin" }),
-        R(body, { g: "body" }),
-        R(E(214, 214, 62, 42), { g: "belly" }),
-        R(heart(300, 168, 11), { g: "heart" }),
-        ...face(176, 38, 26, { cx: 214, mouth: "smile" }),
-    ];
+    return mochi({
+        gg: "sand",
+        blob: E(214, 210, 150, 102),
+        floats: [["h", 44, 42, 16], ["s", 348, 64, 15]],
+        back: [
+            R("M78 208C18 150 6 176 22 214C8 252 28 278 84 236Z", { g: "tail" }),
+            R("M150 118C188 52 258 58 278 124Z", { g: "fin" }),
+            R(Cc(52, 96, 14), { g: "bub" }),
+            R(Cc(78, 64, 12), { g: "bub" }),
+        ],
+        face: { cx: 252, ey: 204, dx: 34, er: 26, mouth: "smile" },
+    });
 }
 function owl() {
-    return chibi({
-        deco: [["t", 48, 40, 12], ["s", 352, 44, 11], ["h", 36, 210, 10]],
+    return mochi({
+        floats: [["h", 300, 48, 16], ["s", 340, 180, 15]],
         back: [
-            R(Cc(336, 58, 26), { g: "moon" }),
-            R("M40 70H360V98H40Z", { g: "branch" }),
-            R(Cc(70, 78, 14), { g: "leaf" }),
+            R(Cc(58, 58, 32), { g: "moon" }),
+            R("M16 292C16 268 384 268 384 292C384 316 16 316 16 292Z", { g: "branch" }),
         ],
-        brx: 64, bry: 46,
-        front: [
-            ...pair("M132 120C112 52 136 28 154 36C172 44 176 96 168 124Z", { g: "tuft" }),
-            R("M176 196Q200 226 224 196Q200 188 176 196Z", { g: "beak" }),
-        ],
-        mouth: "none",
-        top: [R(heart(300, 150, 10), { g: "heart" })],
+        ears: pair("M142 150C122 86 154 64 170 82C184 98 176 148 160 156Z", { g: "tuft" }),
+        front: [R(E(200, 286, 28, 16), { g: "beak" })],
+        face: { mouth: "none", dots: 2 },
     });
 }
 function butterfly() {
-    const up = "M196 168C150 48 36 52 52 140C64 196 140 188 196 180Z";
-    const low = "M196 188C130 196 70 236 96 286C124 328 180 270 196 210Z";
-    return [
-        B(), R(Cc(348, 48, 20), { g: "sun" }), R("M0 360Q200 338 400 360V400H0Z", { g: "grass" }),
-        ...flowerAt(48, 330, 11, true), ...deco([["s", 36, 48, 12], ["h", 360, 120, 11], ["t", 40, 200, 10]]),
-        ...pair(up, { g: "up" }), ...pair(low, { g: "low" }),
-        ...pair(heart(118, 118, 16), { clip: up, g: "spotA" }),
-        ...pair(Cc(86, 108, 12), { clip: up, g: "spotB" }),
-        ...pair(heart(130, 240, 14), { clip: low, g: "spotC" }),
-        R(E(200, 248, 22, 46), { g: "body" }),
-        R(E(200, 150, 78, 64), { g: "head" }),
-        ...face(142, 28, 20, { mouth: "smile" }),
-        ...bow(246, 96),
-    ];
+    const up = "M200 188C168 36 36 48 50 156C62 214 150 206 200 196Z";
+    const low = "M200 208C140 214 58 258 90 326C124 358 176 286 200 232Z";
+    return mochi({
+        gg: "grass",
+        ground: "M0 360Q200 340 400 360V400H0Z",
+        blob: E(200, 204, 74, 86),
+        floats: [["s", 40, 42, 15], ["h", 356, 56, 16]],
+        back: [...pair(up, { g: "wing" }), ...pair(low, { g: "wing" })],
+        face: { ey: 196, dx: 30, er: 24, mouth: "w", dots: 2 },
+        top: [
+            ...pair(Cc(78, 124, 20), { g: "spot" }),
+            ...pair(Cc(98, 286, 18), { g: "spot" }),
+            ...bow(200, 104),
+        ],
+    });
 }
 function turtle() {
-    const shell = E(200, 312, 78, 48);
-    return chibi({
+    return mochi({
         gg: "sand",
-        deco: [["h", 46, 42, 12], ["s", 352, 48, 11], ["t", 34, 200, 10]],
-        back: [R(Cc(58, 58, 22), { g: "sun" }), R(shell, { g: "shell" })],
-        brx: 70, bry: 36, by: 318,
-        front: [
-            R(hex(168, 300, 16), { clip: shell, g: "plate" }),
-            R(hex(232, 300, 16), { clip: shell, g: "plate" }),
-            R(hex(200, 328, 16), { clip: shell, g: "plate" }),
-            R("M200 118C206 86 236 78 248 90C228 112 210 120 200 118Z", { g: "leaf" }),
-        ],
-        mouth: "smile",
-        top: [R(heart(78, 150, 10), { g: "heart" })],
+        blob: E(200, 196, 118, 104),
+        floats: [["h", 44, 42, 16], ["s", 352, 50, 15]],
+        back: [R(E(200, 248, 170, 136), { g: "shell" })],
+        face: { mouth: "smile" },
+        top: [leafAt(200, 78, 26)],
     });
 }
 function elephant() {
-    const hat = "M200 46C188 78 168 108 156 128Q200 142 244 128C232 108 212 78 200 46Z";
-    return chibi({
-        deco: [["h", 42, 40, 12], ["t", 356, 46, 12], ["s", 32, 220, 10]],
+    return mochi({
+        floats: [["h", 44, 40, 16], ["s", 354, 48, 15]],
+        ears: pair(E(78, 214, 56, 48), { g: "ear" }),
         front: [
-            ...pair(E(92, 164, 46, 40), { g: "ear" }),
-            ...pair(E(86, 162, 26, 22), { g: "inEar" }),
-            R("M190 198C186 236 178 262 168 270C160 278 174 280 184 266C192 240 196 220 200 202C204 220 208 240 216 266C226 280 240 278 232 270C222 262 214 236 210 198Z", { g: "trunk" }),
+            R(E(200, 292, 24, 52), { g: "trunk" }),
+            R(Cc(222, 336, 18), { g: "trunk" }),
         ],
-        mouth: "smile",
-        top: [R(hat, { g: "hat" }), R(Cc(200, 46, 12), { g: "pom" }), R(heart(300, 150, 10), { g: "heart" })],
+        face: { mouth: "u", ey: 214, er: 30 },
+        top: [R(Cc(200, 72, 36), { g: "hat" }), R(Cc(200, 40, 14), { g: "pom" })],
     });
 }
 function bunny() {
-    return chibi({
-        deco: [["h", 42, 40, 13], ["s", 356, 50, 12], ["t", 30, 220, 10]],
-        back: [R(Cc(292, 300, 16), { g: "tail" }), R("M332 340L348 292C352 282 368 286 364 298L348 346Z", { g: "carrot" })],
-        front: [...longEars(), R(E(200, 188, 8, 6), { g: "nose" })],
-        top: [...flowerAt(286, 70, 10, false), ...bow(250, 118)],
+    return mochi({
+        floats: [["h", 42, 40, 18], ["s", 354, 46, 16]],
+        ears: longEars(),
+        front: hugHeart(),
+        face: { mouth: "w", dots: 2 },
+        top: [...bow(268, 48), R(Cc(324, 236, 22), { g: "tail" })],
     });
 }
 function panda() {
-    return chibi({
-        deco: [["h", 42, 40, 12], ["s", 356, 48, 12], ["t", 32, 220, 10]],
-        back: [
-            R("M332 390V250C332 240 350 240 350 250V390Z", { g: "bamboo" }),
-            R("M350 262C366 242 388 246 392 256C378 274 358 274 350 262Z", { g: "bleaf" }),
-        ],
-        front: [
-            ...roundEars(102, 108, 30),
-            ...pair(E(158, 158, 36, 32), { g: "patch" }),
-            R(E(200, 190, 12, 8), { g: "nose" }),
+    return mochi({
+        floats: [["h", 44, 42, 16], ["s", 352, 50, 15]],
+        ears: roundEars(108, 132, 40),
+        front: pair(E(144, 236, 46, 38), { g: "patch" }),
+        face: { mouth: "u", dots: 2 },
+        top: [
+            R(E(368, 248, 14, 72), { g: "bamboo" }),
+            leafAt(332, 188, 20),
+            leafAt(348, 236, 16),
         ],
     });
 }
 function fox() {
-    return chibi({
-        deco: [["h", 42, 40, 12], ["s", 356, 46, 12], ["t", 30, 214, 10]],
-        back: [R("M286 300C340 292 368 236 338 214C314 198 286 230 300 258C312 282 300 300 286 300Z", { g: "tail" }), R(E(338, 214, 18, 14), { g: "tailTip" })],
+    return mochi({
+        floats: [["h", 40, 150, 16], ["s", 356, 48, 15]],
+        ears: pointyEars(),
         front: [
-            ...pointyEars(),
-            R("M118 186C140 228 170 224 200 214C230 224 260 228 282 186C272 236 240 246 200 244C160 246 128 236 118 186Z", { g: "mask" }),
-            R(E(200, 196, 10, 7), { g: "nose" }),
+            R(E(326, 250, 48, 32), { g: "tail" }),
+            R(Cc(362, 232, 18), { g: "tip" }),
         ],
-        mouth: "none",
+        face: { mouth: "w" },
+        top: flowerCrown(200, 56),
     });
 }
 function penguin() {
-    return chibi({
+    return mochi({
         gg: "ice",
-        deco: [["s", 42, 40, 13], ["s", 356, 52, 12], ["h", 36, 200, 10]],
-        brx: 62, bry: 46,
-        front: [
-            ...pair(E(124, 300, 18, 28), { g: "wing" }),
-            R(E(200, 198, 18, 12), { g: "beak" }),
-        ],
-        mouth: "none",
-        top: [
-            R("M150 120C158 68 242 68 250 120Q200 106 150 120Z", { g: "hat" }),
-            R(Cc(200, 66, 13), { g: "pom" }),
-            R(heart(300, 150, 10), { g: "heart" }),
-        ],
+        floats: [["s", 44, 44, 16], ["h", 348, 56, 15]],
+        ears: pair(E(72, 248, 32, 26), { g: "wing" }),
+        front: scarf(),
+        face: { mouth: "none", dots: 2 },
+        top: [R(E(200, 274, 34, 16), { g: "beak" })],
     });
 }
 function unicorn() {
-    const horn = "M200 18C194 48 184 86 178 112Q200 122 222 112C216 86 206 48 200 18Z";
-    return chibi({
-        deco: [["t", 42, 40, 12], ["h", 356, 44, 12], ["s", 32, 220, 10], ["h", 364, 190, 10]],
-        back: [...pair(Cc(108, 200, 20), { g: "maneA" }), ...pair(Cc(116, 240, 16), { g: "maneB" })],
-        front: [...pointyEars(), R(horn, { g: "horn" })],
-        top: [R(Cc(168, 108, 16), { g: "maneA" }), R(Cc(232, 108, 16), { g: "maneB" }), R(heart(300, 150, 10), { g: "heart" }), ...bow(268, 130)],
+    return mochi({
+        floats: [["h", 42, 42, 16], ["s", 354, 48, 15], ["h", 46, 220, 13]],
+        ears: pointyEars(),
+        front: [
+            R(Cc(96, 188, 20), { g: "mane" }),
+            R(Cc(304, 176, 18), { g: "mane" }),
+            R(Cc(70, 230, 16), { g: "mane" }),
+        ],
+        face: { mouth: "smile", dots: 2 },
+        top: [R(E(200, 58, 18, 50), { g: "horn" }), ...bow(286, 150)],
     });
 }
 function ellRot(cx, cy, rx, ry, rot) {
@@ -534,182 +591,181 @@ function sweetBloom() {
     return o;
 }
 const ground = () => R("M0 348Q200 328 400 348V400H0Z", { g: "ground" });
+function bumps() {
+    const o = [];
+    for (let i = 0; i < 7; i++) {
+        const a = Math.PI + (i * Math.PI) / 6;
+        o.push(R(Cc(Math.round(200 + Math.cos(a) * 118), Math.round(188 + Math.sin(a) * 96), 26), { g: "bump" }));
+    }
+    return o;
+}
 function hamster() {
-    return chibi({
-        deco: [["h", 42, 40, 12], ["s", 356, 48, 12], ["t", 32, 220, 10]],
-        back: [R(E(300, 250, 16, 11), { g: "seed" })],
-        brx: 64, bry: 44,
-        front: [...roundEars(104, 112, 28), ...pair(E(142, 196, 20, 14), { g: "cheek" }), R(E(200, 190, 12, 8), { g: "nose" })],
-        top: [R(heart(300, 140, 10), { g: "heart" })],
+    return mochi({
+        floats: [["h", 42, 42, 16], ["s", 46, 200, 14]],
+        ears: roundEars(118, 150, 34),
+        face: { mouth: "u", sleepy: true, ey: 240 },
+        top: [...zzz(346, 64), R(E(318, 312, 24, 16), { g: "seed" })],
     });
 }
 function redpanda() {
-    const tail = "M284 306C340 300 372 240 340 214C314 196 284 230 302 260C316 286 302 308 284 306Z";
-    return chibi({
-        deco: [["h", 42, 40, 12], ["s", 356, 48, 11], ["t", 30, 214, 10]],
-        back: [R(tail, { g: "tail" }), R(E(330, 246, 18, 12), { clip: tail, g: "ring" }), R(E(318, 286, 16, 11), { clip: tail, g: "ring" })],
+    return mochi({
+        floats: [["h", 42, 42, 16], ["s", 354, 50, 15]],
+        ears: pointyEars(),
         front: [
-            ...pointyEars(),
-            R("M120 188C142 230 170 222 200 212C230 222 258 230 280 188C270 236 238 246 200 244C162 246 130 236 120 188Z", { g: "mask" }),
-            R(E(200, 196, 10, 7), { g: "nose" }),
+            R(E(324, 248, 50, 34), { g: "tail" }),
+            R(E(338, 236, 24, 14), { g: "stripe" }),
+            R(Cc(360, 262, 16), { g: "stripe" }),
         ],
-        mouth: "smile",
+        face: { mouth: "smile" },
+        top: [leafAt(250, 86, 22)],
     });
 }
 function axolotl() {
-    return chibi({
+    return mochi({
         gg: "water",
-        ground: "M0 348Q200 328 400 348V400H0Z",
-        deco: [["s", 44, 42, 12], ["h", 354, 50, 11], ["t", 34, 250, 10]],
-        back: [R(Cc(52, 90, 8), { g: "bub" }), R(Cc(344, 86, 7), { g: "bub" })],
-        front: [
-            ...pair(E(70, 130, 16, 22), { g: "gill" }),
-            ...pair(E(60, 166, 18, 18), { g: "gill" }),
-            ...pair(E(72, 202, 16, 16), { g: "gill" }),
+        floats: [["s", 44, 44, 15], ["h", 350, 52, 16]],
+        back: [R(Cc(48, 78, 14), { g: "bub" }), R(Cc(344, 96, 12), { g: "bub" })],
+        ears: [
+            ...pair(E(76, 150, 32, 20), { g: "gill" }),
+            ...pair(E(64, 196, 34, 22), { g: "gill" }),
+            ...pair(E(78, 242, 30, 18), { g: "gill" }),
         ],
-        mouth: "smile",
-        top: [R(heart(300, 120, 10), { g: "heart" })],
+        face: { mouth: "smile", tongue: true },
     });
 }
 function otter() {
-    return chibi({
+    return mochi({
         gg: "water",
-        ground: "M0 352Q200 332 400 352V400H0Z",
-        deco: [["h", 42, 40, 12], ["s", 354, 48, 12], ["t", 32, 210, 10]],
-        back: [R("M286 300C330 280 362 310 344 336C322 356 292 332 286 304Z", { g: "tail" })],
-        front: [...roundEars(100, 112, 24), R(E(200, 190, 11, 8), { g: "nose" })],
-        top: [R(Cc(318, 150, 18), { g: "shell" }), R(heart(318, 148, 8), { g: "heart" })],
+        floats: [["h", 42, 42, 16], ["s", 352, 48, 15]],
+        ears: roundEars(112, 146, 30),
+        front: [R(E(328, 286, 48, 20), { g: "tail" })],
+        face: { mouth: "u" },
+        top: [R(Cc(312, 188, 32), { g: "shell" }), R(heart(312, 186, 14), { g: "heart" })],
     });
 }
 function koala() {
-    return chibi({
-        deco: [["h", 42, 40, 12], ["s", 300, 46, 11], ["t", 32, 220, 10]],
-        back: [R("M318 360C310 292 330 240 342 238C356 236 362 274 352 324C366 286 378 278 382 300C386 338 360 370 318 360Z", { g: "branch" })],
-        front: [...roundEars(96, 108, 36), R(E(200, 196, 22, 16), { g: "nose" })],
-        mouth: "smile",
+    return mochi({
+        floats: [["h", 42, 44, 16], ["s", 352, 150, 15]],
+        ears: roundEars(96, 156, 48),
+        front: [R(E(200, 262, 36, 24), { g: "nose" })],
+        face: { mouth: "smile", ey: 228 },
+        top: [leafAt(200, 70, 28)],
     });
 }
 function sloth() {
-    return chibi({
-        deco: [["h", 44, 150, 11], ["s", 354, 150, 11], ["t", 40, 250, 10]],
-        back: [R("M36 62H364V94H36Z", { g: "branch" }), R(Cc(64, 74, 14), { g: "leaf" }), R(Cc(336, 70, 12), { g: "leaf" })],
-        mid: [R(E(78, 150, 16, 40), { g: "arm" }), R(E(322, 150, 16, 40), { g: "arm" })],
-        front: [...pair(E(150, 164, 30, 22), { g: "mask" })],
-        mouth: "smile",
+    return mochi({
+        floats: [["h", 358, 118, 16], ["s", 354, 250, 14]],
+        back: [
+            R("M12 72C12 52 388 52 388 72C388 92 12 92 12 72Z", { g: "branch" }),
+            R(Cc(46, 64, 16), { g: "leaf" }),
+            R(Cc(352, 60, 14), { g: "leaf" }),
+        ],
+        front: [R(E(118, 132, 22, 36), { g: "arm" }), R(E(282, 132, 22, 36), { g: "arm" })],
+        face: { mouth: "u", sleepy: true, ey: 236 },
+        top: zzz(52, 148),
     });
 }
 function frog() {
-    return chibi({
+    return mochi({
         gg: "pond",
-        ground: "M0 348Q200 328 400 348V400H0Z",
-        deco: [["h", 42, 42, 11], ["s", 356, 46, 12], ["t", 32, 230, 10]],
-        back: [R(E(200, 330, 120, 28), { g: "pad" })],
-        fy: 132, dx: 46, er: 24,
-        mouth: "smile",
-        top: [R(heart(78, 140, 10), { g: "heart" })],
+        blob: E(200, 248, 148, 96),
+        floats: [["h", 42, 42, 16], ["s", 354, 48, 15]],
+        back: [R(E(200, 328, 168, 40), { g: "pad" })],
+        face: { ey: 168, dx: 78, er: 36, mouth: "smile", tongue: true },
     });
 }
 function duck() {
-    return chibi({
-        deco: [["h", 42, 40, 12], ["s", 356, 48, 11], ["t", 30, 210, 10]],
-        front: [R(E(292, 292, 22, 28), { g: "wing" }), R(E(200, 206, 28, 14), { g: "bill" })],
-        mouth: "none",
-        top: [...bow(250, 108)],
+    return mochi({
+        floats: [["h", 42, 42, 16], ["s", 354, 50, 15]],
+        front: [R(E(300, 268, 36, 26), { g: "wing" }), R(E(236, 286, 40, 18), { g: "bill" })],
+        face: { mouth: "none" },
+        top: bow(250, 120),
     });
 }
 function puppy() {
-    return chibi({
-        deco: [["h", 42, 40, 13], ["s", 356, 48, 12], ["t", 30, 214, 10]],
-        back: [R(Cc(300, 286, 16), { g: "tail" })],
-        front: [...floppyEars(), R("M156 128H244V148H156Z", { g: "collar" }), R(Cc(236, 122, 9), { g: "tag" }), R(E(200, 190, 12, 8), { g: "nose" })],
+    return mochi({
+        floats: [["h", 42, 40, 18], ["s", 354, 48, 16]],
+        back: [R(Cc(318, 276, 20), { g: "tail" })],
+        ears: floppyEars(),
+        front: [
+            R("M132 252C148 232 252 232 268 252C252 272 148 272 132 252Z", { g: "collar" }),
+            R(Cc(214, 262, 12), { g: "tag" }),
+        ],
+        face: { mouth: "smile", tongue: true, dots: 2 },
     });
 }
 function bear() {
-    return chibi({
-        deco: [["h", 42, 40, 12], ["s", 356, 48, 12], ["t", 30, 220, 10]],
-        mid: [R(E(112, 300, 22, 26), { g: "arm" }), R(E(288, 300, 22, 26), { g: "arm" })],
-        front: [...roundEars(100, 108, 32), R(E(200, 198, 26, 16), { g: "snout" }), R(E(200, 194, 10, 7), { g: "nose" })],
-        mouth: "smile",
-        top: [...bow(262, 100)],
+    return mochi({
+        floats: [["h", 42, 42, 16], ["s", 46, 200, 14]],
+        ears: roundEars(108, 140, 38),
+        front: [R(E(304, 328, 28, 22), { g: "paw" })],
+        face: { mouth: "smile", dots: 2 },
+        top: strawberry(346, 292),
     });
 }
 function hedgehog() {
-    const spikes = [];
-    for (let i = 0; i < 9; i++) {
-        const a = Math.PI * 1.12 + (i * Math.PI * 0.76) / 8;
-        const x1 = 200 + Math.cos(a) * 78;
-        const y1 = 168 + Math.sin(a) * 58;
-        const x2 = 200 + Math.cos(a - 0.14) * 138;
-        const y2 = 168 + Math.sin(a - 0.14) * 112;
-        const x3 = 200 + Math.cos(a + 0.14) * 138;
-        const y3 = 168 + Math.sin(a + 0.14) * 112;
-        spikes.push(R(`M${fx(x1)} ${fx(y1)}L${fx(x2)} ${fx(y2)}L${fx(x3)} ${fx(y3)}Z`, { g: "spike" }));
-    }
-    return chibi({
-        deco: [["h", 40, 40, 11], ["s", 358, 46, 11]],
-        back: spikes,
-        hrx: 96, hry: 72,
-        front: [...roundEars(118, 118, 16), R(E(200, 188, 10, 7), { g: "nose" })],
-        mouth: "smile",
+    return mochi({
+        floats: [["h", 42, 42, 16], ["s", 354, 48, 15]],
+        front: bumps(),
+        face: { mouth: "u", ey: 250, er: 28 },
     });
 }
 function seal() {
-    return chibi({
+    return mochi({
         gg: "water",
-        ground: "M0 346Q200 326 400 346V400H0Z",
-        deco: [["s", 42, 42, 12], ["h", 354, 48, 11], ["t", 32, 220, 10]],
-        back: [R(E(78, 330, 36, 14), { g: "flipper" }), R(E(322, 330, 36, 14), { g: "flipper" })],
-        brx: 70, bry: 40,
-        front: [R(E(200, 192, 12, 8), { g: "nose" })],
-        mouth: "smile",
-        top: [R(Cc(318, 130, 22), { g: "ball" }), R(starAt(318, 130, 5, 12, 5), { g: "star" })],
+        blob: E(200, 214, 150, 108),
+        floats: [["s", 44, 44, 16], ["h", 352, 52, 15]],
+        front: [R(E(70, 300, 40, 18), { g: "flipper" }), R(E(330, 300, 40, 18), { g: "flipper" })],
+        face: { mouth: "smile" },
+        top: [R(Cc(318, 140, 34), { g: "ball" }), R(softStar(318, 140, 18), { g: "star" })],
     });
 }
 function chick() {
-    return chibi({
-        deco: [["s", 42, 42, 12], ["h", 356, 48, 11], ["t", 32, 210, 10]],
-        back: [R("M150 372C150 318 250 318 250 372Z", { g: "shell" })],
-        mid: [R(E(128, 300, 20, 14), { g: "wing" }), R(E(272, 300, 20, 14), { g: "wing" })],
-        front: [R(E(200, 204, 20, 12), { g: "beak" })],
-        mouth: "none",
-        top: [R(heart(78, 140, 10), { g: "heart" })],
+    return mochi({
+        blob: E(188, 214, 120, 108),
+        floats: [["s", 42, 44, 15], ["h", 46, 200, 14]],
+        back: [R("M118 300C118 372 292 372 292 300C260 322 148 322 118 300Z", { g: "shell" })],
+        front: [R(E(200, 286, 26, 14), { g: "beak" })],
+        face: { mouth: "none", dots: 2 },
+        top: [R(softStar(318, 118, 28), { g: "star" }), R(ellRot(318, 168, 12, 46, 0.15), { g: "stick" })],
     });
 }
 function piglet() {
-    return chibi({
-        deco: [["h", 42, 40, 12], ["s", 356, 48, 12], ["t", 30, 214, 10]],
-        back: [R("M286 286C318 266 348 288 336 312C358 304 360 336 332 342C304 350 284 316 286 286Z", { g: "tail" })],
+    return mochi({
+        floats: [["h", 42, 42, 16], ["s", 354, 48, 15]],
+        back: [R(Cc(324, 260, 22), { g: "tail" })],
+        ears: pair("M148 156C128 104 158 82 176 100C190 114 180 158 164 164Z", { g: "ear" }),
         front: [
-            ...pair("M138 130C122 86 138 64 154 72C168 80 172 112 164 132Z", { g: "ear" }),
-            R(E(200, 200, 24, 16), { g: "snout" }),
-            ...pair(E(192, 200, 6, 7), { g: "nostril" }),
+            R(E(200, 270, 36, 26), { g: "snout" }),
+            R(E(186, 272, 10, 12), { g: "nostril" }),
+            R(E(214, 272, 10, 12), { g: "nostril" }),
         ],
-        mouth: "smile",
+        face: { mouth: "smile" },
     });
 }
 function deer() {
-    return chibi({
-        deco: [["h", 44, 150, 11], ["s", 354, 140, 11], ["t", 32, 230, 10]],
+    return mochi({
+        floats: [["h", 44, 160, 15], ["s", 354, 48, 15]],
+        ears: pair(E(150, 150, 18, 32), { g: "ear" }),
         front: [
-            ...pair("M146 118C116 62 132 30 150 38C166 46 172 80 164 116Z", { g: "antler" }),
-            ...pair(Cc(128, 52, 10), { g: "tine" }),
-            ...pair(E(150, 120, 16, 28), { g: "ear" }),
-            R(E(200, 192, 10, 7), { g: "nose" }),
+            ...pair("M158 128C148 70 170 42 184 54C192 78 180 118 170 136Z", { g: "antler" }),
+            ...pair(Cc(152, 62, 13), { g: "tine" }),
         ],
-        top: [...pair(Cc(176, 300, 10), { g: "spot" }), R(heart(78, 168, 9), { g: "heart" })],
-        mouth: "smile",
+        face: { mouth: "u" },
+        top: [R(Cc(164, 292, 16), { g: "spot" }), R(Cc(236, 276, 14), { g: "spot" }), leafAt(250, 90, 22)],
     });
 }
 function mouse() {
-    return chibi({
-        deco: [["h", 42, 42, 11], ["t", 32, 210, 10]],
-        back: [
-            R("M268 292C304 274 336 220 314 190C292 210 278 256 262 286Z", { g: "tail" }),
-            R(Cc(332, 168, 28), { g: "cheese" }),
+    return mochi({
+        floats: [["h", 300, 46, 16], ["s", 354, 120, 14]],
+        back: [R(ellRot(318, 268, 62, 16, -0.7), { g: "tail" })],
+        ears: roundEars(96, 148, 52),
+        face: { mouth: "w", dots: 2 },
+        top: [
+            R(Cc(62, 268, 38), { g: "cheese" }),
+            R(Cc(52, 258, 12), { g: "hole" }),
+            R(Cc(74, 280, 11), { g: "hole" }),
         ],
-        front: [...roundEars(108, 118, 40), R(E(200, 190, 10, 7), { g: "nose" })],
-        top: [R(Cc(322, 158, 9), { g: "hole" }), R(Cc(344, 176, 8), { g: "hole" })],
-        mouth: "smile",
     });
 }
 const PAGES = [
@@ -791,9 +847,10 @@ function drawPage(ctx, page, fills, px, lw) {
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     ctx.strokeStyle = INK;
+    const stroke = page.kind === "animal" ? lw * 2.2 : lw;
     page.regions.forEach((r, i) => {
         const path = getPath(r.d, !!r.m);
-        ctx.lineWidth = lw;
+        ctx.lineWidth = stroke;
         if (r.line) {
             ctx.stroke(path);
             return;

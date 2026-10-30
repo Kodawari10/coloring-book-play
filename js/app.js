@@ -4,8 +4,8 @@
   const PAGES = window.CB_PAGES;
   const DRAW = window.CB_DRAW;
   const COL = window.CB_COLOR;
-  const KEY = 'coloring-book-v2';
-  const OLD_KEY = 'coloring-book-v1';
+  const KEY = 'coloring-book-v3';
+  const OLD_KEYS = ['coloring-book-v2', 'coloring-book-v1'];
   const BACKUP_APP = 'coloring-book-backup';
 
   const $ = (s) => document.querySelector(s);
@@ -52,7 +52,7 @@
       let raw = localStorage.getItem(KEY);
       let fromOldArt = false;
       if (!raw) {
-        raw = localStorage.getItem(OLD_KEY);
+        for (let i = 0; i < OLD_KEYS.length && !raw; i++) raw = localStorage.getItem(OLD_KEYS[i]);
         fromOldArt = !!raw;
       }
       const v = JSON.parse(raw);
@@ -764,7 +764,7 @@
     return {
       app: BACKUP_APP,
       v: 1,
-      art: 2,
+      art: 3,
       saved: new Date().toISOString(),
       state: {
         fills: state.fills,
@@ -812,7 +812,7 @@
   }
   function restoreBackup(b) {
     const s = b.state;
-    state.fills = b.art === 2 ? (s.fills || {}) : {};
+    state.fills = b.art === 3 ? (s.fills || {}) : {};
     state.recent = s.recent || [];
     state.theme = s.theme || 'pastel';
     state.customBg = s.customBg || null;
