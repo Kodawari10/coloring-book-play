@@ -640,6 +640,23 @@ function filt(ctx, type, f, q, to) {
       Array.from(this.active.keys()).forEach((id) => this.stop(id));
     }
 
+    cheer() {
+      const ctx = this.ensure();
+      if (!this.master) return;
+      const now = ctx.currentTime;
+      const notes = this.tuning === '528' ? [72, 76, 79, 84] : [69, 72, 76, 81];
+      notes.forEach((m, i) => {
+        voice({ ctx, add() {} }, this.master, {
+          when: now + i * 0.13,
+          f: hzOf(this.tuning, m),
+          type: 'sine',
+          attack: 0.02,
+          dur: 0.62,
+          peak: 0.06,
+        });
+      });
+    }
+
     ui(kind) {
       if (!this.sfxOn) return;
       const ctx = this.ensure();

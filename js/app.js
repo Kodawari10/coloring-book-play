@@ -178,7 +178,14 @@
         btn.append(badge);
       }
       const fills = fillsOf(p);
-      if (fills.some(Boolean)) {
+      const done = filledCount(p, fills) === shapeCount(p) && shapeCount(p) > 0;
+      if (done) {
+        const sticker = document.createElement('span');
+        sticker.className = 'sticker';
+        sticker.textContent = '★';
+        sticker.setAttribute('aria-label', 'Page finished');
+        btn.append(sticker);
+      } else if (fills.some(Boolean)) {
         const star = document.createElement('span');
         star.className = 'star';
         star.textContent = '✦';
@@ -270,13 +277,37 @@
     }
     return n;
   }
+  function shapeCount(page) {
+    return page.regions.filter((r) => !r.line).length;
+  }
   function celebrate() {
+    toast('Page finished!');
+    try { audio().cheer(); }
+    catch (e) { /* the sticker still appears if this window has no audio */ }
     if (reduceMotion) return;
-    sheet.classList.remove('done');
-    void sheet.offsetWidth;
-    sheet.classList.add('done');
+    const layer = document.createElement('div');
+    layer.className = 'confetti';
+    layer.setAttribute('aria-hidden', 'true');
+    const bits = ['♥', '★', '✦', '♡', '♥'];
+    const colors = ['#e07aa8', '#f6d56b', '#7dcec0', '#b9a0e8', '#f28baf'];
+    for (let i = 0; i < 16; i++) {
+      const s = document.createElement('span');
+      s.textContent = bits[i % bits.length];
+      s.style.left = (6 + Math.random() * 86) + '%';
+      s.style.color = colors[i % colors.length];
+      s.style.fontSize = (18 + (i % 4) * 6) + 'px';
+      s.style.animationDelay = ((i % 5) * 0.06) + 's';
+      layer.append(s);
+    }
+    const msg = document.createElement('p');
+    msg.textContent = 'Page finished!';
+    layer.append(msg);
+    sheet.append(layer);
     clearTimeout(celebrate.t);
-    celebrate.t = setTimeout(() => sheet.classList.remove('done'), 1400);
+    celebrate.t = setTimeout(() => layer.remove(), 1500);
+  }
+  function noteFinish(page, before, after) {
+    if (after === shapeCount(page) && before < after) celebrate();
   }
   function syncHistory() {
     const page = drawingNow();
@@ -292,11 +323,10 @@
     hist[page.id] = (hist[page.id] || []).concat([cur]).slice(-80);
     future[page.id] = [];
     state.fills[page.id] = next;
-    const shapes = page.regions.filter((r) => !r.line).length;
     const after = filledCount(page, next);
     save();
     draw();
-    if (after === shapes && before < shapes) celebrate();
+    noteFinish(page, before, after);
   }
   function pushRecent(c) {
     state.recent = [c, ...state.recent.filter((x) => x !== c)].slice(0, 12);
@@ -340,10 +370,13 @@
     const id = page.id;
     const f = future[id] || [];
     if (!f.length) return;
+    const before = filledCount(page, fillsOf(page));
     hist[id] = (hist[id] || []).concat([fillsOf(page)]).slice(-80);
     state.fills[id] = f.pop();
+    const after = filledCount(page, state.fills[id]);
     save();
     draw();
+    noteFinish(page, before, after);
   }
   function clearPage() {
     const page = drawingNow();
@@ -410,11 +443,15 @@
     $('#hue').style.setProperty('--track', 'linear-gradient(to right,' + hueStops + ')');
     $('#sat').style.setProperty('--track', 'linear-gradient(to right,' + COL.hs([state.hsl[0], 0, state.hsl[2]]) + ',' + COL.hs([state.hsl[0], 100, state.hsl[2]]) + ')');
     $('#lit').style.setProperty('--track', 'linear-gradient(to right,' + COL.hs([state.hsl[0], state.hsl[1], 8]) + ',' + COL.hs([state.hsl[0], state.hsl[1], 50]) + ',' + COL.hs([state.hsl[0], state.hsl[1], 96]) + ')');
+    const canon = (h) => {
+      const hsl = COL.hexToHsl(h);
+      return COL.hslToHex(hsl[0], hsl[1], hsl[2]);
+    };
     document.querySelectorAll('#crayons .crayon').forEach((b) => {
       b.setAttribute('aria-pressed', state.tool === 'fill' && b.dataset.color === hex ? 'true' : 'false');
     });
-    document.querySelectorAll('#recent .dot').forEach((b) => {
-      b.setAttribute('aria-pressed', state.tool === 'fill' && b.dataset.color === hex ? 'true' : 'false');
+    document.querySelectorAll('#recent .dot, #palettes .dot').forEach((b) => {
+      b.setAttribute('aria-pressed', state.tool === 'fill' && canon(b.dataset.color) === hex ? 'true' : 'false');
     });
     const mint = $('#btn-mint');
     const ready = window.CB_STARKNET && CB_STARKNET.configured;
@@ -423,15 +460,53 @@
   function renderRecent() {
     const box = $('#recent');
     box.innerHTML = '';
+    if (state.recent.length) {
+      const label = document.createElement('span');
+      label.className = 'kicker';
+      label.textContent = 'Recent';
+      box.append(label);
+    }
     state.recent.forEach((c) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'dot';
       b.style.background = c;
       b.dataset.color = c;
-      b.setAttribute('aria-label', c);
+      b.setAttribute('aria-label', 'Recent ' + c);
       b.onclick = () => pickHex(c);
       box.append(b);
+    });
+    if (document.body.dataset.coloring === '1') {
+      requestAnimationFrame(() => {
+        fitPage();
+        if (drawingNow()) draw();
+      });
+    }
+  }
+  const PALETTES = [
+    { name: 'Strawberry Milk', colors: ['#f7b7d4', '#f28baf', '#fff0f6', '#f6d56b', '#e07aa8'] },
+    { name: 'Mint Mochi', colors: ['#b7ead3', '#7dcec0', '#e9fff6', '#fff4c2', '#9fd7ee'] },
+    { name: 'Lavender Dream', colors: ['#d7c6f5', '#b9a0e8', '#f6f0ff', '#f7b7d4', '#c9d6ff'] },
+  ];
+  function buildPalettes() {
+    const box = $('#palettes');
+    PALETTES.forEach((palette) => {
+      const row = document.createElement('div');
+      row.className = 'palette';
+      const name = document.createElement('b');
+      name.textContent = palette.name;
+      row.append(name);
+      palette.colors.forEach((c) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'dot';
+        b.style.background = c;
+        b.dataset.color = c;
+        b.setAttribute('aria-label', palette.name + ' ' + c);
+        b.onclick = () => pickHex(c);
+        row.append(b);
+      });
+      box.append(row);
     });
   }
   function buildCrayons() {
@@ -600,7 +675,7 @@
       return;
     }
     tap('rustle');
-    const node = dir < 0 ? $('#leafLeft') : $('#leafRight');
+    const node = $('#leafLeft');
     node.classList.remove('turn-next', 'turn-prev');
     void node.offsetWidth;
     node.classList.add(dir < 0 ? 'turn-prev' : 'turn-next');
@@ -690,26 +765,78 @@
     });
   }
 
+  function heartPath(ctx, x, y, s) {
+    ctx.beginPath();
+    ctx.moveTo(x, y + s * 0.3);
+    ctx.bezierCurveTo(x - s, y - s * 0.4, x - s * 0.2, y - s, x, y - s * 0.25);
+    ctx.bezierCurveTo(x + s * 0.2, y - s, x + s, y - s * 0.4, x, y + s * 0.3);
+    ctx.fill();
+  }
+  function keepsakeCanvas(page, fills) {
+    const W = 1200;
+    const H = 1500;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#f6e7f4';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#fffaf6';
+    ctx.strokeStyle = '#f3a0c0';
+    ctx.lineWidth = 18;
+    ctx.beginPath();
+    ctx.moveTo(84, 48);
+    ctx.arcTo(W - 48, 48, W - 48, H - 48, 36);
+    ctx.arcTo(W - 48, H - 48, 48, H - 48, 36);
+    ctx.arcTo(48, H - 48, 48, 48, 36);
+    ctx.arcTo(48, 48, W - 48, 48, 36);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#f7b7d4';
+    heartPath(ctx, 130, 130, 28);
+    heartPath(ctx, W - 130, 130, 28);
+    heartPath(ctx, 130, H - 150, 22);
+    heartPath(ctx, W - 130, H - 150, 22);
+    ctx.fillStyle = '#5c4458';
+    ctx.textAlign = 'center';
+    ctx.font = '64px Fredoka, Nunito, sans-serif';
+    ctx.fillText(page.name, W / 2, 150);
+    const art = document.createElement('canvas');
+    art.width = art.height = 960;
+    const actx = art.getContext('2d');
+    DRAW.drawPage(actx, page, fills, 960, 3);
+    ctx.drawImage(art, 120, 210, 960, 960);
+    ctx.fillStyle = '#8a6078';
+    ctx.font = '36px Fredoka, Nunito, sans-serif';
+    ctx.fillText('Page ' + page.number, W / 2, 1360);
+    return c;
+  }
   async function downloadPNG() {
     const page = drawingNow();
     if (!page) return;
     const fills = fillsOf(page);
-    const c = document.createElement('canvas');
-    c.width = c.height = 1200;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = window.CB_PAPER;
-    ctx.fillRect(0, 0, 1200, 1200);
-    DRAW.drawPage(ctx, page, fills, 1200, 3);
-    const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
-    if (!blob) { toast('This browser could not make a PNG.'); return; }
+    const blob = await new Promise((res) => keepsakeCanvas(page, fills).toBlob(res, 'image/png'));
+    if (!blob) { toast('This browser could not make a picture.'); return; }
+    const filename = page.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.png';
+    const file = new File([blob], filename, { type: 'image/png' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: page.name, text: page.name + ' from the coloring book' });
+        toast('Picture ready to share');
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+      }
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = page.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.png';
+    a.download = filename;
     document.body.append(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast('PNG saved');
+    toast('Picture saved');
   }
 
   function pixelColors(page, fills) {
@@ -1065,6 +1192,7 @@
   }
 
   buildCrayons();
+  buildPalettes();
   buildSounds();
   buildThemes();
   bind();
