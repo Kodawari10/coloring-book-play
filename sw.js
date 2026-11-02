@@ -1,5 +1,5 @@
 /* Offline cache for Coloring Book. Bump the name when a file the player needs changes. */
-const CACHE = 'coloring-book-v10';
+const CACHE = 'coloring-book-v11';
 const FILES = [
   './',
   './index.html',
@@ -7,11 +7,6 @@ const FILES = [
   './js/pages.js',
   './js/audio.js',
   './js/app.js',
-  './js/starknet-config.js',
-  './js/starknet-abi.js',
-  './js/starknet.js',
-  './js/vendor/get-starknet-core.js',
-  './js/vendor/starkzap.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

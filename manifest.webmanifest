@@ -1,7 +1,7 @@
 {
   "name": "Coloring Book",
   "short_name": "Coloring",
-  "description": "A cozy kawaii coloring book with mandalas, cute animals, relaxing sounds, and optional Starknet stickers.",
+  "description": "A cozy kawaii coloring book with mandalas, cute animals, and relaxing sounds.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

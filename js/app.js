@@ -35,7 +35,6 @@
     tuning: '432',
     tool: 'fill',
     hsl: [200, 80, 55],
-    minted: {},
     leaf: 0,
   };
   const hist = {};
@@ -66,6 +65,8 @@
       if (Array.isArray(v.sounds) && window.CB_migrateSoundId) {
         v.sounds = v.sounds.map((id) => window.CB_migrateSoundId(id)).filter(Boolean);
       }
+      const keep = ['v', 'pageId', 'filter', 'fills', 'recent', 'theme', 'customBg', 'volume', 'layer', 'sfx', 'sfxVolume', 'tuning', 'tool', 'hsl', 'leaf', 'sounds'];
+      Object.keys(v).forEach((k) => { if (!keep.includes(k)) delete v[k]; });
       return v;
     } catch (e) { return null; }
   }
@@ -453,9 +454,6 @@
     document.querySelectorAll('#recent .dot, #palettes .dot').forEach((b) => {
       b.setAttribute('aria-pressed', state.tool === 'fill' && canon(b.dataset.color) === hex ? 'true' : 'false');
     });
-    const mint = $('#btn-mint');
-    const ready = window.CB_STARKNET && CB_STARKNET.configured;
-    mint.textContent = ready ? 'Mint as NFT' : 'Coming soon';
   }
   function renderRecent() {
     const box = $('#recent');
@@ -485,7 +483,7 @@
   }
   const PALETTES = [
     { name: 'Strawberry Milk', colors: ['#f7b7d4', '#f28baf', '#fff0f6', '#f6d56b', '#e07aa8'] },
-    { name: 'Mint Mochi', colors: ['#b7ead3', '#7dcec0', '#e9fff6', '#fff4c2', '#9fd7ee'] },
+    { name: 'Matcha Mochi', colors: ['#b7ead3', '#7dcec0', '#e9fff6', '#fff4c2', '#9fd7ee'] },
     { name: 'Lavender Dream', colors: ['#d7c6f5', '#b9a0e8', '#f6f0ff', '#f7b7d4', '#c9d6ff'] },
   ];
   function buildPalettes() {
@@ -839,46 +837,6 @@
     toast('Picture saved');
   }
 
-  function pixelColors(page, fills) {
-    const N = 8;
-    const S = 48;
-    const c = document.createElement('canvas');
-    c.width = c.height = N * S;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = window.CB_PAPER;
-    ctx.fillRect(0, 0, c.width, c.height);
-    DRAW.drawPage(ctx, page, fills, c.width, 1.1);
-    const img = ctx.getImageData(0, 0, c.width, c.height).data;
-    const colors = [];
-    for (let y = 0; y < N; y++) {
-      for (let x = 0; x < N; x++) {
-        let r = 0, g = 0, b = 0, n = 0;
-        for (let yy = y * S; yy < (y + 1) * S; yy += 4) {
-          for (let xx = x * S; xx < (x + 1) * S; xx += 4) {
-            const i = (yy * c.width + xx) * 4;
-            r += img[i]; g += img[i + 1]; b += img[i + 2]; n++;
-          }
-        }
-        const R = Math.round(r / n), G = Math.round(g / n), B = Math.round(b / n);
-        colors.push('0x' + [R, G, B].map((v) => v.toString(16).padStart(2, '0')).join(''));
-      }
-    }
-    return colors;
-  }
-  function artKey(page, fills) {
-    return page.id + ':' + fills.map((c) => c || '').join(',');
-  }
-  async function fingerprint(page, fills) {
-    const canon = JSON.stringify({ page: page.id, fills: fills.map((c) => c || null) });
-    try {
-      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canon));
-      return '0x' + [...new Uint8Array(buf)].slice(0, 31).map((b) => b.toString(16).padStart(2, '0')).join('');
-    } catch (e) {
-      let h = 2166136261;
-      for (let i = 0; i < canon.length; i++) h = Math.imul(h ^ canon.charCodeAt(i), 16777619);
-      return '0x' + (h >>> 0).toString(16).padStart(8, '0');
-    }
-  }
 
   function closeModal() { $('#modalRoot').innerHTML = ''; }
   function modal(html) {
@@ -903,7 +861,6 @@
         sfx: !!state.sfx,
         sfxVolume: state.sfxVolume,
         tuning: state.tuning === '528' ? '528' : '432',
-        minted: state.minted,
         pageId: state.pageId,
         hsl: state.hsl,
         tool: state.tool,
@@ -913,8 +870,7 @@
   }
   function summarize(st) {
     const pages = Object.keys(st.fills || {}).length;
-    const minted = Object.keys(st.minted || {}).length;
-    return pages + ' colored page' + (pages === 1 ? '' : 's') + (minted ? ' · ' + minted + ' minted' : '');
+    return pages + ' colored page' + (pages === 1 ? '' : 's');
   }
   function downloadBackup() {
     save();
@@ -951,7 +907,6 @@
     if (Array.isArray(s.sounds) && window.CB_migrateSoundId) {
       state.sounds = s.sounds.map((id) => window.CB_migrateSoundId(id)).filter(Boolean);
     }
-    state.minted = s.minted || {};
     state.pageId = s.pageId || PAGES[0].id;
     state.hsl = s.hsl || [200, 80, 55];
     state.tool = s.tool || 'fill';
@@ -1003,44 +958,6 @@
     };
   }
 
-  function mintModal() {
-    const page = drawingNow();
-    if (!page) return;
-    const fills = fillsOf(page);
-    const colored = page.regions.some((r, i) => !r.line && !r.base && fills[i]);
-    const chain = window.CB_STARKNET;
-    const ready = !!(chain && chain.configured);
-    modal(
-      '<button class="iconbtn close" type="button" aria-label="Close">✕</button>' +
-      '<h2>Mint as NFT</h2>' +
-      '<div class="preview-row"><canvas id="mintPreview" width="280" height="280"></canvas>' +
-      '<div><div class="name">' + page.name + '</div>' +
-      '<p class="small">Sepolia testnet only. No real funds. The on-chain picture is an 8×8 crayon-pixel copy of this page, drawn as SVG by the contract.</p></div></div>' +
-      (ready ? '<div id="snConnect"></div><p><button class="btn gold" id="mintGo" type="button"' + (colored ? '' : ' disabled') + '>Mint this page</button></p>' : '<div class="chain-note"><b>Coming soon.</b> The Sepolia contract address is not set yet, so minting stays off and nothing is sent. When it is deployed, paste the address into <code>js/starknet-config.js</code>.</div>') +
-      '<p class="mint-status" id="mintStatus" role="status"></p>' +
-      '<p><button class="btn" id="agentCopy" type="button">Copy agent call</button></p>'
-    );
-    const prev = $('#mintPreview');
-    const ctx = prev.getContext('2d');
-    if (ctx) DRAW.drawPage(ctx, page, fills, 280, 2);
-    if (ready && chain.mountConnect) chain.mountConnect($('#snConnect'));
-    const go = $('#mintGo');
-    if (go) go.onclick = () => chain.mint(page.id);
-    $('#agentCopy').onclick = async () => {
-      if (!chain) { toast('Starknet layer is not loaded'); return; }
-      const payload = await chain.agentPayload(page.id);
-      const txt = JSON.stringify(payload, null, 2);
-      try { await navigator.clipboard.writeText(txt); toast('Agent call copied'); }
-      catch (e) { toast('Could not copy. The call is in the panel.'); }
-      const pre = document.createElement('pre');
-      pre.className = 'small';
-      pre.style.whiteSpace = 'pre-wrap';
-      pre.style.wordBreak = 'break-all';
-      pre.textContent = txt;
-      $('#mintStatus').after(pre);
-    };
-    if (!colored && ready) $('#mintStatus').textContent = 'Color a shape first.';
-  }
 
   function bind() {
     $('#homeBtn').onclick = () => setScreen('cover');
@@ -1118,7 +1035,6 @@
     $('#tool-clear').onclick = clearPage;
     $('#tool-surprise').onclick = surprise;
     $('#btn-png').onclick = () => { downloadPNG(); };
-    $('#btn-mint').onclick = mintModal;
     $('#pagePrev').onclick = () => step(-1);
     $('#pageNext').onclick = () => step(1);
     $('#magicPicker').addEventListener('input', (e) => pickHex(e.target.value));
@@ -1205,38 +1121,6 @@
   paintCover();
   setScreen('cover');
 
-  window.CB_GAME = {
-    toast,
-    state,
-    pages: PAGES,
-    save,
-    draw,
-    setScreen,
-    refresh() { applyTheme(); paintCrayon(); if (document.body.dataset.screen === 'book') renderBook(); },
-    async job(pageId) {
-      const page = pageById(pageId || state.pageId);
-      const fills = fillsOf(page);
-      return {
-        page,
-        fills,
-        key: artKey(page, fills),
-        hash: await fingerprint(page, fills),
-        colors: pixelColors(page, fills),
-        colored: page.regions.some((r, i) => !r.line && !r.base && fills[i]),
-      };
-    },
-    markMinted(key, info) {
-      state.minted[key] = info;
-      save();
-      toast('Minted on Starknet');
-    },
-    setMintStatus(html, kind) {
-      const el = $('#mintStatus');
-      if (!el) return;
-      el.className = 'mint-status' + (kind ? ' ' + kind : '');
-      el.innerHTML = html;
-    },
-  };
 
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
