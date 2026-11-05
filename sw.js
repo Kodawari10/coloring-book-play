@@ -1,5 +1,5 @@
 /* Offline cache for Coloring Book. Bump the name when a file the player needs changes. */
-const CACHE = 'coloring-book-v11';
+const CACHE = 'coloring-book-v12';
 const FILES = [
   './',
   './index.html',
