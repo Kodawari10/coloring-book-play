@@ -1,0 +1,1495 @@
+/* Coloring Book desk: cover, gallery, paper page, crayon tin, sounds, backup. */
+(function () {
+  'use strict';
+  const PAGES = window.CB_PAGES;
+  const DRAW = window.CB_DRAW;
+  const COL = window.CB_COLOR;
+  const KEY = 'coloring-book-v4';
+  const OLD_KEYS = ['coloring-book-v3', 'coloring-book-v2', 'coloring-book-v1'];
+  const BACKUP_APP = 'coloring-book-backup';
+
+  const $ = (s) => document.querySelector(s);
+  const sheet = $('#sheet');
+  const canvas = $('#pageCanvas');
+  const facing = $('#facing');
+  const facingCanvas = $('#facingCanvas');
+  const contentsPage = $('#contentsPage');
+  const backPage = $('#backPage');
+  const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let zoom = 1;
+  let panX = 0;
+  let panY = 0;
+
+  const state = load() || {
+    v: 1,
+    pageId: PAGES[0].id,
+    filter: 'all',
+    fills: {},
+    recent: [],
+    theme: 'pastel',
+    customBg: null,
+    volume: 0.6,
+    layer: true,
+    sfx: false,
+    sfxVolume: 0.35,
+    tuning: '432',
+    tool: 'fill',
+    hsl: [200, 80, 55],
+    stickers: {},
+    stamp: 'heart',
+    magic: 'dots',
+    pattern: 'solid',
+    leaf: 0,
+    days: [],
+  };
+  const hist = {};
+  const future = {};
+  let engine = null;
+  const playing = new Set();
+  let toastTimer = 0;
+
+  function clampVol(n, fallback) {
+    return typeof n === 'number' && n >= 0 && n <= 1 ? n : fallback;
+  }
+  function load() {
+    try {
+      let raw = localStorage.getItem(KEY);
+      let fromOldArt = false;
+      if (!raw) {
+        for (let i = 0; i < OLD_KEYS.length && !raw; i++) raw = localStorage.getItem(OLD_KEYS[i]);
+        fromOldArt = !!raw;
+      }
+      const v = JSON.parse(raw);
+      if (!v || v.v !== 1) return null;
+      if (fromOldArt) v.fills = {};
+      v.sfx = v.sfx === true;
+      v.sfxVolume = clampVol(v.sfxVolume, 0.35);
+      v.tuning = v.tuning === '528' ? '528' : '432';
+      if (v.filter !== 'all' && v.filter !== 'mandala' && v.filter !== 'animal' && v.filter !== 'new' && v.filter !== 'mine') v.filter = 'all';
+      if (typeof v.leaf !== 'number' || v.leaf < 0 || v.leaf > PAGES.length + 1) v.leaf = 0;
+      if (Array.isArray(v.sounds) && window.CB_migrateSoundId) {
+        v.sounds = v.sounds.map((id) => window.CB_migrateSoundId(id)).filter(Boolean);
+      }
+      const keep = ['v', 'pageId', 'filter', 'fills', 'recent', 'theme', 'customBg', 'volume', 'layer', 'sfx', 'sfxVolume', 'tuning', 'tool', 'hsl', 'leaf', 'sounds', 'stickers', 'stamp', 'magic', 'pattern', 'days'];
+      Object.keys(v).forEach((k) => { if (!keep.includes(k)) delete v[k]; });
+      v.days = window.CB_DAY.clean(v.days, 120);
+      v.stickers = cleanStickers(v.stickers);
+      if (v.stamp !== 'heart' && v.stamp !== 'star' && v.stamp !== 'spark' && v.stamp !== 'flower') v.stamp = 'heart';
+      if (v.magic !== 'dots' && v.magic !== 'stripe' && v.magic !== 'wash') v.magic = 'dots';
+      if (!['solid', 'glitter', 'dots', 'stripe', 'hearts', 'stars'].includes(v.pattern)) v.pattern = 'solid';
+      if (v.tool !== 'fill' && v.tool !== 'erase' && v.tool !== 'stamp' && v.tool !== 'magic') v.tool = 'fill';
+      return v;
+    } catch (e) { return null; }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); }
+    catch (e) { toast('This browser could not save the page.'); }
+  }
+  function toast(msg) {
+    const el = $('#toast');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+  }
+  function pageById(id) { return PAGES.find((p) => p.id === id) || PAGES[0]; }
+  function emptyFills(page) { return page.regions.map(() => null); }
+  function fillsOf(page) {
+    const saved = state.fills[page.id];
+    const base = emptyFills(page);
+    if (!saved) return base;
+    for (let i = 0; i < base.length; i++) base[i] = saved[i] || null;
+    return base;
+  }
+  function colorHex() { return COL.hslToHex(state.hsl[0], state.hsl[1], state.hsl[2]); }
+  function cleanStickers(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    Object.keys(raw).forEach((id) => {
+      if (!PAGES.some((p) => p.id === id) || !Array.isArray(raw[id])) return;
+      out[id] = raw[id].filter((s) => s && (s.k === 'heart' || s.k === 'star' || s.k === 'spark' || s.k === 'flower') && typeof s.x === 'number' && typeof s.y === 'number').slice(0, 30);
+    });
+    return out;
+  }
+  function stickersOf(page) {
+    const list = state.stickers && state.stickers[page.id];
+    return Array.isArray(list) ? list : [];
+  }
+  function startedPage(page) {
+    const fills = state.fills[page.id];
+    const marks = state.stickers && state.stickers[page.id];
+    return (Array.isArray(fills) && fills.some(Boolean)) || (Array.isArray(marks) && marks.length > 0);
+  }
+  function shownPages() {
+    if (state.filter === 'new') return PAGES.filter((p) => p.fresh);
+    if (state.filter === 'mine') return PAGES.filter(startedPage);
+    return PAGES.filter((p) => state.filter === 'all' || p.kind === state.filter);
+  }
+  /* The book order never follows the contents filter. Page n is PAGES[n - 1]. */
+  function folioAt(index) {
+    if (index <= 0) return { type: 'contents' };
+    if (index > PAGES.length) return { type: 'back' };
+    const drawing = PAGES[index - 1];
+    return { type: 'drawing', drawing: drawing, id: drawing.id, number: drawing.number, name: drawing.name, kind: drawing.kind };
+  }
+  function drawingNow() {
+    const folio = folioAt(state.leaf || 0);
+    return folio.type === 'drawing' ? folio.drawing : null;
+  }
+
+  function applyTheme() {
+    const skin = window.CB_SKINS.find((s) => s.id === state.theme) || window.CB_SKINS[0];
+    let bg = skin.bg.slice();
+    let panel = skin.panel.slice();
+    const accent = skin.accent.slice();
+    if (state.customBg) {
+      bg = COL.hexToHsl(state.customBg);
+      panel = [bg[0], bg[1], bg[2] < 50 ? Math.min(100, bg[2] + 10) : Math.max(0, bg[2] - 8)];
+    }
+    const look = COL.lookFromHsl(bg, panel, accent);
+    const dark = bg[2] < 50;
+    const root = document.documentElement;
+    root.style.setProperty('--desk', look.bg);
+    root.style.setProperty('--desk-2', look.panel);
+    root.style.setProperty('--ink', look.text);
+    root.style.setProperty('--muted', look.sub);
+    root.style.setProperty('--accent', look.accent);
+    root.style.setProperty('--on-accent', look.onAccent);
+    root.style.setProperty('--line', look.border);
+    root.style.setProperty('--card', dark ? look.panel : 'rgba(255,252,248,.84)');
+    document.body.dataset.theme = state.customBg ? 'custom' : skin.id;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', state.customBg || COL.hx(skin.bg));
+    document.querySelectorAll('#themes button').forEach((b) => {
+      b.setAttribute('aria-pressed', b.dataset.theme === state.theme && !state.customBg ? 'true' : 'false');
+    });
+    document.querySelectorAll('#bgdots .dot').forEach((b) => {
+      b.setAttribute('aria-pressed', b.dataset.bg === state.customBg ? 'true' : 'false');
+    });
+  }
+
+  function setScreen(name) {
+    document.body.dataset.screen = name;
+    $('#screen-cover').classList.toggle('hidden', name !== 'cover');
+    $('#screen-book').classList.toggle('hidden', name !== 'book');
+    if (name === 'cover') touchToday();
+    if (name === 'book') renderBook();
+  }
+
+  function contentsLabel() {
+    return state.filter === 'mine' ? 'My art' : 'Contents';
+  }
+  function renderThumbs() {
+    const box = $('#thumbs');
+    const heading = contentsPage.querySelector('h2');
+    const note = contentsPage.querySelector('.gallery-note');
+    if (state.filter === 'mine') {
+      heading.textContent = 'My art';
+      note.textContent = 'Pages you have started or finished. Tap one to keep coloring.';
+    } else {
+      heading.textContent = 'Contents';
+      const today = todayPage();
+      note.textContent = today
+        ? 'Tap a number to open that page. ' + today.name + ' is today\'s page.'
+        : 'One picture on each page. Tap a number to open that page.';
+    }
+    const todayId = (todayPage() || {}).id;
+    const list = shownPages();
+    box.innerHTML = '';
+    if (!list.length) {
+      box.innerHTML = '<p class="gallery-empty">Color a page and it will gather here, with a star when you finish.</p>';
+      document.querySelectorAll('[data-filter]').forEach((b) => {
+        b.setAttribute('aria-pressed', b.dataset.filter === state.filter ? 'true' : 'false');
+      });
+      return;
+    }
+    list.forEach((p) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'thumb';
+      btn.dataset.page = p.id;
+      btn.dataset.kind = p.kind;
+      btn.dataset.number = String(p.number);
+      btn.setAttribute('aria-label', 'Page ' + p.number + ', ' + p.name + (p.id === todayId ? ', today\'s page' : ''));
+      if (p.id === state.pageId) btn.setAttribute('aria-current', 'true');
+      const hole = document.createElement('span');
+      hole.className = 'hole';
+      hole.setAttribute('aria-hidden', 'true');
+      const tab = document.createElement('span');
+      tab.className = 'tab';
+      tab.setAttribute('aria-hidden', 'true');
+      const c = document.createElement('canvas');
+      const num = document.createElement('span');
+      num.className = 'num';
+      num.textContent = String(p.number);
+      const label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = p.name;
+      btn.append(hole, tab, c, num, label);
+      if (p.id === todayId) {
+        btn.dataset.today = '1';
+        const mark = document.createElement('span');
+        mark.className = 'today-mark';
+        mark.textContent = 'Today';
+        btn.append(mark);
+      }
+      if (p.fresh) {
+        btn.dataset.fresh = '1';
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = 'New';
+        btn.append(badge);
+      }
+      const fills = fillsOf(p);
+      const total = shapeCount(p);
+      const done = filledCount(p, fills) === total && total > 0;
+      if (done) {
+        const sticker = document.createElement('span');
+        sticker.className = 'sticker';
+        sticker.textContent = '★';
+        sticker.setAttribute('aria-label', 'Page finished');
+        btn.append(sticker);
+      } else if (fills.some(Boolean) || stickersOf(p).length) {
+        const n = filledCount(p, fills);
+        const lit = total && n ? Math.max(1, Math.min(3, Math.ceil((n / total) * 3))) : 1;
+        const star = document.createElement('span');
+        star.className = 'star';
+        star.setAttribute('aria-label', lit + ' of 3');
+        for (let i = 0; i < 3; i++) {
+          const mark = document.createElement('i');
+          mark.textContent = i < lit ? '★' : '☆';
+          if (i < lit) mark.className = 'lit';
+          star.append(mark);
+        }
+        btn.append(star);
+      }
+      btn.onclick = () => openDrawing(p.id);
+      box.append(btn);
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const px = Math.round(120 * dpr);
+      c.width = px;
+      c.height = px;
+      const ctx = c.getContext('2d');
+      if (ctx) paintPage(ctx, p, fills, px, 4);
+    });
+    document.querySelectorAll('[data-filter]').forEach((b) => {
+      b.setAttribute('aria-pressed', b.dataset.filter === state.filter ? 'true' : 'false');
+    });
+  }
+
+  function applyZoom() {
+    if (zoom === 1 && panX === 0 && panY === 0) sheet.style.transform = '';
+    else sheet.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+    sheet.style.transformOrigin = 'center center';
+  }
+  function clampPan() {
+    const w = canvas.clientWidth || 280;
+    const limit = Math.max(0, ((zoom - 1) * w) / 2 + 20);
+    panX = Math.max(-limit, Math.min(limit, panX));
+    panY = Math.max(-limit, Math.min(limit, panY));
+  }
+  function syncZoom() {
+    const slider = $('#zoomSlider');
+    if (slider) slider.value = String(Math.max(1, Math.round(zoom * 4) / 4));
+  }
+  function setZoom(next) {
+    const clamped = Math.min(3, Math.max(1, Math.round(next * 4) / 4));
+    zoom = clamped < 1.05 ? 1 : clamped;
+    if (zoom === 1) { panX = 0; panY = 0; }
+    else clampPan();
+    applyZoom();
+    syncZoom();
+    draw();
+  }
+  function fitPage() {
+    const leaf = $('#leafLeft');
+    if (document.body.dataset.coloring !== '1') {
+      leaf.style.width = '';
+      leaf.style.height = '';
+      canvas.style.width = '';
+      canvas.style.height = '';
+      return;
+    }
+    const spread = $('#spread');
+    const availW = spread.clientWidth;
+    const availH = spread.clientHeight;
+    if (availW < 40 || availH < 40) return;
+    const size = Math.floor(Math.min(availW, availH));
+    leaf.style.width = size + 'px';
+    leaf.style.height = size + 'px';
+    const inner = Math.max(120, size - 28);
+    canvas.style.width = inner + 'px';
+    canvas.style.height = inner + 'px';
+  }
+  function draw() {
+    const page = drawingNow();
+    if (!page) return;
+    const fills = fillsOf(page);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const css = Math.max(120, Math.floor(canvas.clientWidth || sheet.clientWidth || 360));
+    const px = Math.min(4096, Math.round(css * dpr * zoom));
+    if (canvas.width !== px) { canvas.width = px; canvas.height = px; }
+    const ctx = canvas.getContext('2d');
+    if (ctx) paintPage(ctx, page, fills, px, 2.6);
+    $('#pageName').textContent = page.name;
+    const shapes = page.regions.filter((r) => !r.line).length;
+    const done = page.regions.filter((r, i) => !r.line && fills[i]).length;
+    const kind = page.kind === 'mandala' ? 'Mandala' : 'Animal';
+    const todayBit = todayPage() && todayPage().id === page.id ? ' · today\'s page' : '';
+    $('#pageMeta').textContent = 'Page ' + page.number + ' · ' + kind + ' · ' + done + ' of ' + shapes + ' shapes colored' + todayBit;
+    sheet.classList.toggle('erase', state.tool === 'erase');
+    paintCrayon();
+    syncHistory();
+  }
+
+  function paintCover() {
+    const c = $('#coverArt');
+    const page = PAGES[0];
+    const palette = window.CB_SWATCHES;
+    const fills = page.regions.map((r, i) => {
+      if (r.line || r.base) return null;
+      if (r.g === 'bg') return '#fff4fb';
+      return palette[i % palette.length];
+    });
+    const ctx = c.getContext('2d');
+    if (ctx) DRAW.drawPage(ctx, page, fills, c.width, 3);
+  }
+
+  function filledCount(page, fills) {
+    let n = 0;
+    for (let i = 0; i < page.regions.length; i++) {
+      if (!page.regions[i].line && fills[i]) n++;
+    }
+    return n;
+  }
+  function shapeCount(page) {
+    return page.regions.filter((r) => !r.line).length;
+  }
+  function isComplete(page) {
+    const total = shapeCount(page);
+    return total > 0 && filledCount(page, fillsOf(page)) === total;
+  }
+  function finishedTotal() {
+    let n = 0;
+    for (let i = 0; i < PAGES.length; i++) if (isComplete(PAGES[i])) n++;
+    return n;
+  }
+  function todayPage() {
+    return window.CB_DAY.page(PAGES, new Date());
+  }
+  function renderToday() {
+    const card = $('#todayCard');
+    const page = todayPage();
+    if (!card || !page) return;
+    const done = isComplete(page);
+    const streak = window.CB_DAY.streak(state.days, new Date());
+    $('#todayFace').textContent = done ? '★' : (page.kind === 'mandala' ? '✦' : '♥');
+    $('#todayKicker').textContent = done ? 'Colored today' : 'Today\'s page';
+    $('#todayName').textContent = page.name;
+    $('#todayStreak').textContent = 'Page ' + page.number + ' · ' + window.CB_DAY.streakLabel(streak);
+    $('#todayGo').textContent = done ? 'See it' : 'Color it';
+    card.setAttribute('aria-label', (done ? 'See today\'s page, ' : 'Color today\'s page, ') + page.name + ', page ' + page.number);
+    card.classList.remove('hidden');
+  }
+  function touchToday() {
+    const next = window.CB_DAY.adopt(state.days, new Date(), 120);
+    const prev = (state.days || []).join();
+    state.days = next;
+    if (next.join() !== prev) save();
+    renderToday();
+  }
+  function celebrate(page) {
+    toast('Page finished!');
+    try { audio().cheer(); }
+    catch (e) { /* the sticker still appears if this window has no audio */ }
+    const layer = document.createElement('div');
+    layer.className = 'confetti';
+    layer.setAttribute('aria-hidden', 'true');
+    if (!reduceMotion) {
+      const bits = ['♥', '★', '✦', '♡', '♥'];
+      const colors = ['#e07aa8', '#f6d56b', '#7dcec0', '#b9a0e8', '#f28baf'];
+      for (let i = 0; i < 16; i++) {
+        const s = document.createElement('span');
+        s.textContent = bits[i % bits.length];
+        s.style.left = (6 + Math.random() * 86) + '%';
+        s.style.color = colors[i % colors.length];
+        s.style.fontSize = (18 + (i % 4) * 6) + 'px';
+        s.style.animationDelay = ((i % 5) * 0.06) + 's';
+        layer.append(s);
+      }
+    }
+    const msg = document.createElement('p');
+    msg.textContent = 'Page finished!';
+    const extra = document.createElement('p');
+    extra.className = 'note';
+    const isToday = !!(page && todayPage() && page.id === todayPage().id);
+    extra.textContent = window.CB_DAY.note(page ? page.name : '', finishedTotal(), isToday);
+    layer.append(msg, extra);
+    sheet.append(layer);
+    clearTimeout(celebrate.t);
+    celebrate.t = setTimeout(() => layer.remove(), 2300);
+    renderToday();
+  }
+  function noteFinish(page, before, after) {
+    if (after === shapeCount(page) && before < after) celebrate(page);
+  }
+  function syncHistory() {
+    const page = drawingNow();
+    const id = page ? page.id : '';
+    $('#tool-undo').disabled = !(id && hist[id] && hist[id].length);
+    $('#tool-redo').disabled = !(id && future[id] && future[id].length);
+  }
+  function snapshot(page) {
+    return { fills: fillsOf(page), stickers: stickersOf(page).map((s) => ({ k: s.k, x: s.x, y: s.y, c: s.c })) };
+  }
+  function applySnap(id, entry) {
+    if (Array.isArray(entry)) {
+      state.fills[id] = entry;
+      return;
+    }
+    state.fills[id] = entry.fills;
+    if (!state.stickers) state.stickers = {};
+    state.stickers[id] = entry.stickers || [];
+  }
+  function commit(next, nextStickers) {
+    const page = drawingNow();
+    if (!page) return;
+    const before = filledCount(page, fillsOf(page));
+    hist[page.id] = (hist[page.id] || []).concat([snapshot(page)]).slice(-80);
+    future[page.id] = [];
+    state.fills[page.id] = next;
+    if (nextStickers) {
+      if (!state.stickers) state.stickers = {};
+      state.stickers[page.id] = nextStickers;
+    }
+    const after = filledCount(page, next);
+    save();
+    draw();
+    noteFinish(page, before, after);
+  }
+  function pushRecent(c) {
+    state.recent = [c, ...state.recent.filter((x) => x !== c)].slice(0, 12);
+    save();
+    renderRecent();
+  }
+
+  function onPointerDown(e) {
+    if (e.button != null && e.button !== 0) return;
+    const pageHit = drawingNow();
+    if (!pageHit) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 400;
+    const y = ((e.clientY - rect.top) / rect.height) * 400;
+    const page = pageHit;
+    if (state.tool === 'stamp') {
+      placeStamp(page, x, y);
+      return;
+    }
+    const idx = DRAW.hitTest(page, x, y);
+    if (idx < 0) return;
+    const cur = fillsOf(page);
+    const val = fillValue();
+    if ((cur[idx] || null) === val) return;
+    const next = cur.slice();
+    next[idx] = val;
+    commit(next);
+    if (val && String(val).indexOf('pat:') !== 0) { pushRecent(val); tap('pop'); }
+    else if (val) tap('sparkle');
+  }
+
+  function placeStamp(page, x, y) {
+    if (x < 4 || y < 4 || x > 396 || y > 396) return;
+    const list = stickersOf(page);
+    if (list.length >= 30) { toast('This page is full of stickers'); return; }
+    const next = list.concat([{ k: state.stamp || 'heart', x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, c: colorHex() }]);
+    commit(fillsOf(page), next);
+    tap('sparkle');
+  }
+  function undo() {
+    const page = drawingNow();
+    if (!page) return;
+    const id = page.id;
+    const h = hist[id] || [];
+    if (!h.length) return;
+    future[id] = (future[id] || []).concat([snapshot(page)]).slice(-80);
+    applySnap(id, h.pop());
+    save();
+    draw();
+  }
+  function redo() {
+    const page = drawingNow();
+    if (!page) return;
+    const id = page.id;
+    const f = future[id] || [];
+    if (!f.length) return;
+    const before = filledCount(page, fillsOf(page));
+    hist[id] = (hist[id] || []).concat([snapshot(page)]).slice(-80);
+    applySnap(id, f.pop());
+    const after = filledCount(page, state.fills[id]);
+    save();
+    draw();
+    noteFinish(page, before, after);
+  }
+  function clearPage() {
+    const page = drawingNow();
+    if (!page) return;
+    const cur = fillsOf(page);
+    if (cur.every((v) => !v) && !stickersOf(page).length) return;
+    commit(emptyFills(page), []);
+  }
+  function surprise() {
+    const page = drawingNow();
+    if (!page) return;
+    const base = Math.random() * 360;
+    const scheme = [0, 30, 150, 180, 210, 300][Math.floor(Math.random() * 6)];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const palette = [];
+    for (let i = 0; i < 7; i++) {
+      const h = (base + (i % 2 ? scheme : 0) + rnd(-25, 25) + 360) % 360;
+      palette.push(COL.hslToHex(h, rnd(45, 90), rnd(45, 85)));
+    }
+    const byGroup = new Map();
+    let k = Math.floor(Math.random() * palette.length);
+    const next = page.regions.map((r, i) => {
+      if (r.line || r.base) return null;
+      const key = r.g || ('i' + i);
+      let c = byGroup.get(key);
+      if (!c) {
+        c = key === 'bg' ? COL.hslToHex(base, rnd(30, 60), rnd(88, 95)) : palette[k++ % palette.length];
+        byGroup.set(key, c);
+      }
+      return c;
+    });
+    commit(next);
+    tap('sparkle');
+    toast('A fresh palette ✦');
+  }
+
+  function fillValue() {
+    const hex = colorHex();
+    if (state.tool === 'erase') return null;
+    if (state.tool === 'magic') return 'pat:' + (state.magic || 'dots') + ':' + hex + ':#fffaf6';
+    if (state.pattern && state.pattern !== 'solid') return 'pat:' + state.pattern + ':' + hex + ':#fffaf6';
+    return hex;
+  }
+  function setTool(tool) {
+    state.tool = tool;
+    save();
+    $('#tool-fill').setAttribute('aria-pressed', tool === 'fill' ? 'true' : 'false');
+    $('#tool-erase').setAttribute('aria-pressed', tool === 'erase' ? 'true' : 'false');
+    $('#tool-stamp').setAttribute('aria-pressed', tool === 'stamp' ? 'true' : 'false');
+    $('#tool-magic').setAttribute('aria-pressed', tool === 'magic' ? 'true' : 'false');
+    const drawing = !!drawingNow();
+    $('#stampBar').classList.toggle('hidden', !(drawing && tool === 'stamp'));
+    $('#magicBar').classList.toggle('hidden', !(drawing && tool === 'magic'));
+    sheet.classList.toggle('erase', tool === 'erase');
+    paintCrayon();
+  }
+  function syncStamp() {
+    document.querySelectorAll('#stampBar button').forEach((b) => {
+      b.setAttribute('aria-pressed', b.dataset.stamp === state.stamp ? 'true' : 'false');
+    });
+    document.querySelectorAll('#magicBar button').forEach((b) => {
+      b.setAttribute('aria-pressed', b.dataset.magic === state.magic ? 'true' : 'false');
+    });
+  }
+  function pickHex(hex) {
+    state.hsl = COL.hexToHsl(hex);
+    state.tool = 'fill';
+    save();
+    setTool('fill');
+    paintCrayon();
+  }
+  function paintCrayon() {
+    const hex = colorHex();
+    $('#currentSwatch').style.background = hex;
+    $('#hexLabel').textContent = hex.toUpperCase();
+    $('#magicPicker').value = hex;
+    $('#hue').value = state.hsl[0];
+    $('#sat').value = state.hsl[1];
+    $('#lit').value = state.hsl[2];
+    $('#hueVal').textContent = state.hsl[0] + '°';
+    $('#satVal').textContent = state.hsl[1] + '%';
+    $('#litVal').textContent = state.hsl[2] + '%';
+    const hueStops = [0, 60, 120, 180, 240, 300, 360].map((h) => COL.hs([h, state.hsl[1], state.hsl[2]])).join(', ');
+    $('#hue').style.setProperty('--track', 'linear-gradient(to right,' + hueStops + ')');
+    $('#sat').style.setProperty('--track', 'linear-gradient(to right,' + COL.hs([state.hsl[0], 0, state.hsl[2]]) + ',' + COL.hs([state.hsl[0], 100, state.hsl[2]]) + ')');
+    $('#lit').style.setProperty('--track', 'linear-gradient(to right,' + COL.hs([state.hsl[0], state.hsl[1], 8]) + ',' + COL.hs([state.hsl[0], state.hsl[1], 50]) + ',' + COL.hs([state.hsl[0], state.hsl[1], 96]) + ')');
+    const canon = (h) => {
+      const hsl = COL.hexToHsl(h);
+      return COL.hslToHex(hsl[0], hsl[1], hsl[2]);
+    };
+    document.querySelectorAll('#crayons .crayon').forEach((b) => {
+      b.setAttribute('aria-pressed', state.tool === 'fill' && b.dataset.color === hex ? 'true' : 'false');
+    });
+    document.querySelectorAll('#recent .dot, #palettes .dot').forEach((b) => {
+      b.setAttribute('aria-pressed', state.tool === 'fill' && canon(b.dataset.color) === hex ? 'true' : 'false');
+    });
+    document.querySelectorAll('#patterns .solid').forEach((el) => { el.style.background = hex; });
+    refreshPatternSwatches();
+    syncPattern();
+  }
+  const PATTERN_KINDS = [
+    ['solid', 'Solid color'],
+    ['glitter', 'Glitter'],
+    ['dots', 'Polka dots'],
+    ['stripe', 'Soft stripes'],
+    ['hearts', 'Tiny hearts'],
+    ['stars', 'Tiny stars'],
+  ];
+  function syncPattern() {
+    const kind = state.pattern || 'solid';
+    document.querySelectorAll('#patterns button').forEach((b) => {
+      b.setAttribute('aria-pressed', b.dataset.pattern === kind ? 'true' : 'false');
+    });
+  }
+  function setPattern(kind) {
+    state.pattern = PATTERN_KINDS.some((row) => row[0] === kind) ? kind : 'solid';
+    state.tool = 'fill';
+    save();
+    setTool('fill');
+  }
+  function refreshPatternSwatches() {
+    document.querySelectorAll('#patterns canvas').forEach((c) => {
+      const ctx = c.getContext('2d');
+      if (!ctx) return;
+      const px = c.width;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, px, px);
+      const path = new Path2D();
+      path.rect(0, 0, 400, 400);
+      ctx.setTransform(px / 400, 0, 0, px / 400, 0, 0);
+      DRAW.paintPattern(ctx, path, 'pat:' + c.dataset.kind + ':' + colorHex() + ':#fffaf6');
+    });
+  }
+  function buildPatterns() {
+    const row = $('#patterns');
+    const name = document.createElement('b');
+    name.textContent = 'Patterns';
+    row.append(name);
+    PATTERN_KINDS.forEach(([kind, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.pattern = kind;
+      b.setAttribute('aria-label', label);
+      b.title = label;
+      if (kind === 'solid') {
+        const sw = document.createElement('span');
+        sw.className = 'sw solid';
+        b.append(sw);
+      } else {
+        const c = document.createElement('canvas');
+        c.width = 56;
+        c.height = 56;
+        c.dataset.kind = kind;
+        b.append(c);
+      }
+      b.onclick = () => setPattern(kind);
+      row.append(b);
+    });
+    syncPattern();
+  }
+  function renderRecent() {
+    const box = $('#recent');
+    box.innerHTML = '';
+    if (state.recent.length) {
+      const label = document.createElement('span');
+      label.className = 'kicker';
+      label.textContent = 'Recent';
+      box.append(label);
+    }
+    state.recent.forEach((c) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'dot';
+      b.style.background = c;
+      b.dataset.color = c;
+      b.setAttribute('aria-label', 'Recent ' + c);
+      b.onclick = () => pickHex(c);
+      box.append(b);
+    });
+    if (document.body.dataset.coloring === '1') {
+      requestAnimationFrame(() => {
+        fitPage();
+        if (drawingNow()) draw();
+      });
+    }
+  }
+  const PALETTES = [
+    { name: 'Strawberry Milk', colors: ['#f7b7d4', '#f28baf', '#fff0f6', '#f6d56b', '#e07aa8'] },
+    { name: 'Matcha Mochi', colors: ['#b7ead3', '#7dcec0', '#e9fff6', '#fff4c2', '#9fd7ee'] },
+    { name: 'Lavender Dream', colors: ['#d7c6f5', '#b9a0e8', '#f6f0ff', '#f7b7d4', '#c9d6ff'] },
+    { name: 'Hot Cocoa', colors: ['#f6d3b4', '#c4846a', '#fff6ea', '#f7b7d4', '#e07a6a'] },
+  ];
+  function buildPalettes() {
+    const box = $('#palettes');
+    PALETTES.forEach((palette) => {
+      const row = document.createElement('div');
+      row.className = 'palette';
+      const name = document.createElement('b');
+      name.textContent = palette.name;
+      row.append(name);
+      palette.colors.forEach((c) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'dot';
+        b.style.background = c;
+        b.dataset.color = c;
+        b.setAttribute('aria-label', palette.name + ' ' + c);
+        b.onclick = () => pickHex(c);
+        row.append(b);
+      });
+      box.append(row);
+    });
+  }
+  function buildCrayons() {
+    const box = $('#crayons');
+    window.CB_SWATCHES.forEach((c) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'crayon';
+      b.dataset.color = c;
+      b.style.setProperty('--c', c);
+      b.setAttribute('aria-label', 'Crayon ' + c);
+      b.innerHTML = '<span class="tip"></span><span class="barrel"></span><span class="wrap"></span>';
+      b.onclick = () => pickHex(c);
+      box.append(b);
+    });
+    const magic = document.createElement('button');
+    magic.type = 'button';
+    magic.className = 'crayon magic';
+    magic.setAttribute('aria-label', 'Magic crayon');
+    magic.innerHTML = '<span class="tip"></span><span class="barrel"></span><span class="wrap"></span>';
+    magic.onclick = () => $('#magicPicker').click();
+    box.append(magic);
+  }
+  function audio() {
+    if (!engine) engine = new window.CBSound();
+    engine.setVolume(state.volume);
+    engine.setSfx(!!state.sfx, state.sfxVolume);
+    engine.setTuning(state.tuning === '528' ? '528' : '432');
+    return engine;
+  }
+  function tap(kind) {
+    if (!state.sfx) return;
+    try { audio().ui(kind); }
+    catch (e) { /* coloring still works if this window has no audio */ }
+  }
+  function syncSfx() {
+    const b = $('#sfxToggle');
+    if (!b) return;
+    b.setAttribute('aria-pressed', state.sfx ? 'true' : 'false');
+    b.textContent = state.sfx ? 'Crayon taps on' : 'Crayon taps off';
+    const sl = $('#sfxVolume');
+    if (sl) sl.value = Math.round((state.sfxVolume == null ? 0.35 : state.sfxVolume) * 100);
+    if (engine) engine.setSfx(!!state.sfx, state.sfxVolume);
+  }
+  function syncTuning() {
+    const mode = state.tuning === '528' ? '528' : '432';
+    state.tuning = mode;
+    document.querySelectorAll('[data-tuning]').forEach((b) => {
+      b.setAttribute('aria-pressed', b.dataset.tuning === mode ? 'true' : 'false');
+    });
+    const note = $('#tuningNote');
+    if (note) {
+      note.textContent = mode === '528'
+        ? 'Tuned to 528 Hz. The key note is 528.'
+        : 'Tuned to 432 Hz. A is 432.';
+    }
+    if (engine) engine.setTuning(mode);
+  }
+  function buildSounds() {
+    const box = $('#sounds');
+    let row = null;
+    let last = '';
+    window.CB_SOUNDS.forEach((s) => {
+      if (s.group !== last) {
+        const group = document.createElement('div');
+        group.className = 'snd-group';
+        const kicker = document.createElement('div');
+        kicker.className = 'kicker';
+        kicker.textContent = (window.CB_SOUND_GROUPS && window.CB_SOUND_GROUPS[s.group]) || '';
+        row = document.createElement('div');
+        row.className = 'sounds';
+        group.append(kicker, row);
+        box.append(group);
+        last = s.group;
+      }
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'snd';
+      b.dataset.sound = s.id;
+      b.innerHTML = '<span class="snd-ico" aria-hidden="true">' + s.emoji + '</span><span class="snd-name">' + s.label + '</span>';
+      b.setAttribute('aria-label', s.label);
+      b.setAttribute('aria-pressed', 'false');
+      b.onclick = () => toggleSound(s.id);
+      row.append(b);
+    });
+  }
+  function toggleSound(id) {
+    try {
+      const eng = audio();
+      const canon = (window.CB_migrateSoundId && window.CB_migrateSoundId(id)) || id;
+      const btn = document.querySelector('[data-sound="' + canon + '"]');
+      if (playing.has(canon)) {
+        eng.stop(canon);
+        playing.delete(canon);
+        if (btn) btn.setAttribute('aria-pressed', 'false');
+      } else {
+        if (!state.layer) {
+          playing.forEach((x) => { eng.stop(x); const o = document.querySelector('[data-sound="' + x + '"]'); if (o) o.setAttribute('aria-pressed', 'false'); });
+          playing.clear();
+        }
+        eng.start(canon);
+        playing.add(canon);
+        if (btn) btn.setAttribute('aria-pressed', 'true');
+      }
+      $('#audioErr').classList.add('hidden');
+      $('#soundQuick').setAttribute('aria-pressed', playing.size ? 'true' : 'false');
+    } catch (e) {
+      $('#audioErr').classList.remove('hidden');
+    }
+  }
+  function stopAllSounds() {
+    if (engine) engine.stopAll();
+    playing.clear();
+    document.querySelectorAll('[data-sound]').forEach((b) => b.setAttribute('aria-pressed', 'false'));
+    $('#soundQuick').setAttribute('aria-pressed', 'false');
+  }
+  function buildThemes() {
+    const box = $('#themes');
+    window.CB_SKINS.forEach((s) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.theme = s.id;
+      b.textContent = s.label;
+      b.onclick = () => { state.theme = s.id; state.customBg = null; save(); applyTheme(); };
+      box.append(b);
+    });
+    const dots = $('#bgdots');
+    window.CB_BG_PRESETS.forEach((h) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'dot';
+      b.style.background = h;
+      b.dataset.bg = h;
+      b.setAttribute('aria-label', 'Desk ' + h);
+      b.onclick = () => { state.customBg = h; save(); applyTheme(); };
+      dots.append(b);
+    });
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'tool';
+    reset.textContent = 'Theme default';
+    reset.onclick = () => { state.customBg = null; save(); applyTheme(); };
+    dots.append(reset);
+  }
+
+  let turnToken = 0;
+  function openDrawing(id) {
+    const dest = pageById(id).number;
+    const cur = state.leaf || 0;
+    const delta = dest - cur;
+    goTo(dest, Math.abs(delta) === 1 ? (delta > 0 ? 1 : -1) : 0);
+  }
+  function goTo(leaf, dir) {
+    const max = PAGES.length + 1;
+    const next = Math.max(0, Math.min(max, leaf));
+    const prev = state.leaf || 0;
+    const apply = () => {
+      state.leaf = next;
+      const folio = folioAt(next);
+      if (folio.type === 'drawing') state.pageId = folio.id;
+      save();
+      renderBook();
+    };
+    if (document.body.dataset.screen !== 'book' || !dir || reduceMotion || next === prev) {
+      apply();
+      return;
+    }
+    tap('rustle');
+    const node = $('#leafLeft');
+    node.classList.remove('turn-next', 'turn-prev');
+    void node.offsetWidth;
+    node.classList.add(dir < 0 ? 'turn-prev' : 'turn-next');
+    const token = ++turnToken;
+    setTimeout(() => {
+      node.classList.remove('turn-next', 'turn-prev');
+      if (token === turnToken) apply();
+    }, 280);
+  }
+  function step(dir) {
+    const cur = state.leaf || 0;
+    const n = cur + dir;
+    if (n < 0) { setScreen('cover'); return; }
+    if (n > PAGES.length + 1) return;
+    goTo(n, dir);
+  }
+  function paintLeaf(el, index, active) {
+    const folio = folioAt(index);
+    el.classList.toggle('active', index === active);
+    el.dataset.folio = folio.type;
+    el.onclick = (e) => {
+      if (index === (state.leaf || 0)) return;
+      if (e.target.closest('button, a, input, label, .seg')) return;
+      const delta = index - (state.leaf || 0);
+      goTo(index, Math.abs(delta) === 1 ? (delta > 0 ? 1 : -1) : 0);
+    };
+    const foot = document.createElement('div');
+    foot.className = 'folio-foot';
+    if (folio.type === 'drawing') {
+      foot.textContent = String(folio.number);
+      const title = document.createElement('div');
+      title.className = 'folio-title';
+      title.textContent = folio.name;
+      el.replaceChildren(title, index === active ? sheet : facing, foot);
+    } else if (folio.type === 'contents') {
+      foot.textContent = contentsLabel();
+      el.replaceChildren(contentsPage, foot);
+    } else {
+      foot.textContent = 'End';
+      el.replaceChildren(backPage, foot);
+    }
+  }
+  function paintFacing() {
+    const active = state.leaf || 0;
+    const left = active % 2 === 0 ? active : active - 1;
+    const other = left === active ? left + 1 : left;
+    const folio = folioAt(other);
+    const c = facingCanvas;
+    if (!c || folio.type !== 'drawing') return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const css = Math.max(200, Math.floor(c.clientWidth || 240));
+    const px = Math.round(css * dpr);
+    if (c.width !== px) { c.width = px; c.height = px; }
+    const ctx = c.getContext('2d');
+    if (ctx) paintPage(ctx, folio.drawing, fillsOf(folio.drawing), px, 3);
+  }
+  function renderBook() {
+    const active = state.leaf || 0;
+    zoom = 1;
+    panX = 0;
+    panY = 0;
+    applyZoom();
+    syncZoom();
+    paintLeaf($('#leafLeft'), active, active);
+    const folio = folioAt(active);
+    document.body.dataset.coloring = folio.type === 'drawing' ? '1' : '0';
+    $('.stage').classList.toggle('quiet', folio.type !== 'drawing');
+    if (folio.type === 'drawing') {
+      $('#pageName').textContent = folio.name;
+      fitPage();
+      draw();
+    } else if (folio.type === 'contents') {
+      $('#pageName').textContent = contentsLabel();
+      $('#pageMeta').textContent = state.filter === 'mine' ? 'Pages you have colored' : (PAGES.length + ' pictures, one on each page');
+      fitPage();
+      renderThumbs();
+    } else {
+      $('#pageName').textContent = 'The end';
+      $('#pageMeta').textContent = 'Back cover';
+      fitPage();
+    }
+    $('#pageNext').disabled = active >= PAGES.length + 1;
+    syncHistory();
+    requestAnimationFrame(() => {
+      if (document.body.dataset.screen !== 'book') return;
+      fitPage();
+      if (drawingNow()) draw();
+    });
+  }
+
+  function paintPage(ctx, page, fills, px, lw) {
+    DRAW.drawPage(ctx, page, fills, px, lw);
+    const list = stickersOf(page);
+    if (!list.length) return;
+    const s = px / 400;
+    ctx.setTransform(s, 0, 0, s, 0, 0);
+    list.forEach((st) => drawStamp(ctx, st));
+  }
+  function drawStamp(ctx, st) {
+    ctx.save();
+    ctx.translate(st.x, st.y);
+    ctx.fillStyle = typeof st.c === 'string' ? st.c : '#e07aa8';
+    ctx.strokeStyle = '#5c4458';
+    ctx.lineWidth = 1.7;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    if (st.k === 'star') {
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const r = i % 2 === 0 ? 16 : 7;
+        const x = Math.cos(a) * r;
+        const y = Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (st.k === 'spark') {
+      ctx.beginPath();
+      ctx.moveTo(0, -16);
+      ctx.quadraticCurveTo(0, 0, 16, 0);
+      ctx.quadraticCurveTo(0, 0, 0, 16);
+      ctx.quadraticCurveTo(0, 0, -16, 0);
+      ctx.quadraticCurveTo(0, 0, 0, -16);
+      ctx.fill();
+      ctx.stroke();
+    } else if (st.k === 'flower') {
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI * 2) / 5;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * 9, Math.sin(a) * 9, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#fffaf6';
+      ctx.beginPath();
+      ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      heartPath(ctx, 0, 2, 14);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function heartPath(ctx, x, y, s) {
+    ctx.beginPath();
+    ctx.moveTo(x, y + s * 0.3);
+    ctx.bezierCurveTo(x - s, y - s * 0.4, x - s * 0.2, y - s, x, y - s * 0.25);
+    ctx.bezierCurveTo(x + s * 0.2, y - s, x + s, y - s * 0.4, x, y + s * 0.3);
+    ctx.fill();
+  }
+  function keepsakeCanvas(page, fills) {
+    const W = 1200;
+    const H = 1500;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#f6e7f4';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#fffaf6';
+    ctx.strokeStyle = '#f3a0c0';
+    ctx.lineWidth = 18;
+    ctx.beginPath();
+    ctx.moveTo(84, 48);
+    ctx.arcTo(W - 48, 48, W - 48, H - 48, 36);
+    ctx.arcTo(W - 48, H - 48, 48, H - 48, 36);
+    ctx.arcTo(48, H - 48, 48, 48, 36);
+    ctx.arcTo(48, 48, W - 48, 48, 36);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#f7b7d4';
+    heartPath(ctx, 130, 130, 28);
+    heartPath(ctx, W - 130, 130, 28);
+    heartPath(ctx, 130, H - 150, 22);
+    heartPath(ctx, W - 130, H - 150, 22);
+    ctx.fillStyle = '#5c4458';
+    ctx.textAlign = 'center';
+    ctx.font = '64px Fredoka, Nunito, sans-serif';
+    ctx.fillText(page.name, W / 2, 150);
+    const art = document.createElement('canvas');
+    art.width = art.height = 960;
+    const actx = art.getContext('2d');
+    paintPage(actx, page, fills, 960, 3);
+    ctx.drawImage(art, 120, 210, 960, 960);
+    ctx.fillStyle = '#8a6078';
+    ctx.font = '36px Fredoka, Nunito, sans-serif';
+    ctx.fillText('Page ' + page.number, W / 2, 1360);
+    return c;
+  }
+  async function downloadPNG() {
+    const page = drawingNow();
+    if (!page) return;
+    const fills = fillsOf(page);
+    const blob = await new Promise((res) => keepsakeCanvas(page, fills).toBlob(res, 'image/png'));
+    if (!blob) { toast('This browser could not make a picture.'); return; }
+    const filename = page.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.png';
+    const file = new File([blob], filename, { type: 'image/png' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: page.name, text: page.name + ' from the coloring book' });
+        toast('Picture ready to share');
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+      }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('Picture saved');
+  }
+
+
+  function closeModal() { $('#modalRoot').innerHTML = ''; }
+  function modal(html) {
+    $('#modalRoot').innerHTML = '<div class="modal"><div class="sheet-modal">' + html + '</div></div>';
+    const root = $('#modalRoot').firstChild;
+    root.addEventListener('click', (e) => { if (e.target === root || e.target.closest('.close')) closeModal(); });
+  }
+
+  function backupData() {
+    return {
+      app: BACKUP_APP,
+      v: 1,
+      art: 4,
+      saved: new Date().toISOString(),
+      state: {
+        fills: state.fills,
+        recent: state.recent,
+        theme: state.theme,
+        customBg: state.customBg,
+        volume: state.volume,
+        layer: state.layer,
+        sfx: !!state.sfx,
+        sfxVolume: state.sfxVolume,
+        tuning: state.tuning === '528' ? '528' : '432',
+        stickers: state.stickers || {},
+        stamp: state.stamp,
+        magic: state.magic,
+        pattern: state.pattern || 'solid',
+        days: state.days || [],
+        pageId: state.pageId,
+        hsl: state.hsl,
+        tool: state.tool,
+        filter: state.filter,
+      },
+    };
+  }
+  function summarize(st) {
+    const pages = Object.keys(st.fills || {}).length;
+    return pages + ' colored page' + (pages === 1 ? '' : 's');
+  }
+  function downloadBackup() {
+    save();
+    const blob = new Blob([JSON.stringify(backupData())], { type: 'application/json' });
+    const a = document.createElement('a');
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'coloring-book-backup-' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '.json';
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('Backup saved');
+  }
+  function parseBackup(text) {
+    try {
+      const b = JSON.parse(text);
+      if (!b || b.app !== BACKUP_APP || !b.state || typeof b.state !== 'object') return null;
+      return b;
+    } catch (e) { return null; }
+  }
+  function restoreBackup(b) {
+    const s = b.state;
+    state.fills = b.art === 4 ? (s.fills || {}) : {};
+    state.recent = s.recent || [];
+    state.theme = s.theme || 'pastel';
+    state.customBg = s.customBg || null;
+    state.volume = typeof s.volume === 'number' ? s.volume : 0.6;
+    state.layer = s.layer !== false;
+    state.sfx = s.sfx === true;
+    state.sfxVolume = clampVol(s.sfxVolume, 0.35);
+    state.tuning = s.tuning === '528' ? '528' : '432';
+    if (Array.isArray(s.sounds) && window.CB_migrateSoundId) {
+      state.sounds = s.sounds.map((id) => window.CB_migrateSoundId(id)).filter(Boolean);
+    }
+    state.stickers = cleanStickers(s.stickers);
+    if (s.stamp === 'star' || s.stamp === 'spark' || s.stamp === 'flower' || s.stamp === 'heart') state.stamp = s.stamp;
+    if (s.magic === 'stripe' || s.magic === 'wash' || s.magic === 'dots') state.magic = s.magic;
+    state.pattern = ['glitter', 'dots', 'stripe', 'hearts', 'stars'].includes(s.pattern) ? s.pattern : 'solid';
+    state.days = window.CB_DAY.adopt(s.days, new Date(), 120);
+    state.pageId = s.pageId || PAGES[0].id;
+    state.hsl = s.hsl || [200, 80, 55];
+    state.tool = s.tool || 'fill';
+    state.filter = s.filter || 'all';
+    $('#volume').value = Math.round(state.volume * 100);
+    syncSfx();
+    syncTuning();
+    $('#mixToggle').setAttribute('aria-pressed', state.layer ? 'true' : 'false');
+    $('#mixToggle').textContent = state.layer ? 'Mixing on' : 'One at a time';
+    if (engine) engine.setVolume(state.volume);
+    save();
+    applyTheme();
+    renderRecent();
+    setTool(state.tool);
+    if (s.pageId) {
+      const restored = pageById(s.pageId);
+      if (restored && restored.id === s.pageId) state.leaf = restored.number;
+    }
+    setScreen(document.body.dataset.screen === 'cover' ? 'book' : document.body.dataset.screen);
+    closeModal();
+    toast('Backup restored');
+  }
+  function backupModal() {
+    modal(
+      '<button class="iconbtn close" type="button" aria-label="Close">✕</button>' +
+      '<h2>Backup &amp; restore</h2>' +
+      '<p class="small">Your coloring lives in this browser. A backup file keeps it if you clear the browser, and lets you carry on somewhere else. The file stays on your device.</p>' +
+      '<p class="small"><b>Right now:</b> ' + summarize(state) + '</p>' +
+      '<p><button class="btn primary" id="bkSave" type="button">Download backup</button></p>' +
+      '<p class="small">Pick a Coloring Book backup. You will see what is inside before anything changes.</p>' +
+      '<label class="btn filebtn">Choose backup file…<input id="bkFile" type="file" accept=".json,application/json" aria-label="Choose a Coloring Book backup file"></label>' +
+      '<div id="bkOut"></div>'
+    );
+    $('#bkSave').onclick = downloadBackup;
+    $('#bkFile').onchange = () => {
+      const f = $('#bkFile').files && $('#bkFile').files[0];
+      const out = $('#bkOut');
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const b = parseBackup(String(reader.result || ''));
+        if (!b) { out.innerHTML = '<p class="small" style="color:#9c2348">That file is not a Coloring Book backup, so nothing changed.</p>'; return; }
+        out.innerHTML = '<p class="small"><b>' + (f.name) + '</b><br>' + summarize(b.state) + '</p>' +
+          '<p class="small">Restoring replaces the coloring in this browser.</p>' +
+          '<button class="btn primary" id="bkRestore" type="button">Replace with this backup</button>';
+        $('#bkRestore').onclick = () => restoreBackup(b);
+      };
+      reader.readAsText(f);
+    };
+  }
+
+
+  function bind() {
+    $('#homeBtn').onclick = () => setScreen('cover');
+    $('#openBook').onclick = () => { state.leaf = 0; setScreen('book'); };
+    $('#todayCard').onclick = () => {
+      const page = todayPage();
+      if (!page) return;
+      state.leaf = page.number;
+      state.pageId = page.id;
+      save();
+      setScreen('book');
+    };
+    $('#galleryBtn').onclick = () => { state.leaf = 0; setScreen('book'); };
+    $('#closeBook').onclick = () => setScreen('cover');
+    $('#backupBtn').onclick = backupModal;
+    $('#soundQuick').onclick = () => {
+      if (playing.size) stopAllSounds();
+      else toggleSound('rain');
+    };
+    document.querySelectorAll('[data-filter]').forEach((b) => {
+      b.onclick = () => {
+        state.filter = b.dataset.filter;
+        save();
+        if ((state.leaf || 0) === 0) {
+          $('#pageName').textContent = contentsLabel();
+          $('#pageMeta').textContent = state.filter === 'mine' ? 'Pages you have colored' : (PAGES.length + ' pictures, one on each page');
+          const foot = $('#leafLeft .folio-foot');
+          if (foot) foot.textContent = contentsLabel();
+        }
+        renderThumbs();
+      };
+    });
+    let swipe = null;
+    const pointers = new Map();
+    let pinch = null;
+    let wheelAcc = 0;
+    $('#spread').addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      if (e.target.closest('button, a, input, label, .seg')) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!swipe) swipe = { x: e.clientX, y: e.clientY, t: e.target, panX: panX, panY: panY, zoom: zoom, multi: false, panned: false };
+      if (pointers.size >= 2) {
+        swipe.multi = true;
+        const pts = [...pointers.values()];
+        pinch = {
+          dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1,
+          zoom: zoom,
+          midX: (pts[0].x + pts[1].x) / 2,
+          midY: (pts[0].y + pts[1].y) / 2,
+          panX: panX,
+          panY: panY,
+        };
+      }
+    });
+    $('#spread').addEventListener('pointermove', (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size >= 2 && pinch) {
+        const pts = [...pointers.values()];
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        const mx = (pts[0].x + pts[1].x) / 2;
+        const my = (pts[0].y + pts[1].y) / 2;
+        const next = Math.min(3, Math.max(1, pinch.zoom * (dist / pinch.dist)));
+        zoom = next < 1.05 ? 1 : next;
+        if (zoom === 1) { panX = 0; panY = 0; }
+        else {
+          panX = pinch.panX + (mx - pinch.midX);
+          panY = pinch.panY + (my - pinch.midY);
+          clampPan();
+        }
+        applyZoom();
+        syncZoom();
+        if (swipe) swipe.multi = true;
+        return;
+      }
+      if (zoom > 1 && swipe && pointers.size === 1 && !swipe.multi) {
+        const dx = e.clientX - swipe.x;
+        const dy = e.clientY - swipe.y;
+        if (Math.hypot(dx, dy) > 8) {
+          swipe.panned = true;
+          panX = swipe.panX + dx;
+          panY = swipe.panY + dy;
+          clampPan();
+          applyZoom();
+        }
+      }
+    });
+    $('#spread').addEventListener('pointerup', (e) => {
+      const start = swipe;
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinch = null;
+      if (pointers.size > 0) return;
+      swipe = null;
+      if (!start) return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      const pinched = start.multi || Math.abs(zoom - start.zoom) > 0.01;
+      if (pinched) { syncZoom(); draw(); return; }
+      if (start.panned) return;
+      if (zoom <= 1 && Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) {
+        step(dx < 0 ? 1 : -1);
+        return;
+      }
+      if (start.t && start.t.id === 'pageCanvas' && Math.hypot(dx, dy) < 14) onPointerDown(e);
+    });
+    $('#spread').addEventListener('pointercancel', () => { swipe = null; pointers.clear(); pinch = null; });
+    $('#spread').addEventListener('wheel', (e) => {
+      if (!drawingNow()) return;
+      e.preventDefault();
+      wheelAcc += e.deltaY;
+      if (Math.abs(wheelAcc) < 36) return;
+      const dir = wheelAcc > 0 ? -1 : 1;
+      wheelAcc = 0;
+      setZoom(zoom + dir * 0.25);
+    }, { passive: false });
+    $('#zoomIn').onclick = () => setZoom(zoom + 0.25);
+    $('#zoomOut').onclick = () => setZoom(zoom - 0.25);
+    $('#zoomFit').onclick = () => setZoom(1);
+    $('#zoomSlider').addEventListener('input', (e) => setZoom(Number(e.target.value)));
+    $('#suppliesBtn').onclick = () => {
+      const open = document.body.classList.toggle('supplies-open');
+      $('#suppliesBtn').setAttribute('aria-pressed', open ? 'true' : 'false');
+      $('#suppliesBtn').textContent = open ? 'Close' : 'More';
+    };
+    $('#tool-fill').onclick = () => setTool('fill');
+    $('#tool-erase').onclick = () => setTool('erase');
+    $('#tool-undo').onclick = undo;
+    $('#tool-redo').onclick = redo;
+    $('#tool-clear').onclick = clearPage;
+    $('#tool-surprise').onclick = surprise;
+    $('#tool-magic').onclick = () => setTool('magic');
+    $('#tool-stamp').onclick = () => setTool('stamp');
+    document.querySelectorAll('#stampBar button').forEach((b) => {
+      b.onclick = () => { state.stamp = b.dataset.stamp; save(); syncStamp(); };
+    });
+    document.querySelectorAll('#magicBar button').forEach((b) => {
+      b.onclick = () => { state.magic = b.dataset.magic; save(); syncStamp(); if (state.tool !== 'magic') setTool('magic'); };
+    });
+    $('#btn-png').onclick = () => { downloadPNG(); };
+    $('#pagePrev').onclick = () => step(-1);
+    $('#pageNext').onclick = () => step(1);
+    $('#magicPicker').addEventListener('input', (e) => pickHex(e.target.value));
+    ['hue', 'sat', 'lit'].forEach((id, idx) => {
+      $('#' + id).addEventListener('input', (e) => {
+        state.hsl[idx] = Number(e.target.value);
+        state.tool = 'fill';
+        save();
+        setTool('fill');
+      });
+    });
+    $('#mixToggle').onclick = () => {
+      state.layer = !state.layer;
+      save();
+      $('#mixToggle').setAttribute('aria-pressed', state.layer ? 'true' : 'false');
+      $('#mixToggle').textContent = state.layer ? 'Mixing on' : 'One at a time';
+    };
+    $('#stopSounds').onclick = stopAllSounds;
+    $('#volume').addEventListener('input', (e) => {
+      state.volume = Number(e.target.value) / 100;
+      save();
+      if (engine) engine.setVolume(state.volume);
+    });
+    $('#sfxToggle').onclick = () => {
+      state.sfx = !state.sfx;
+      save();
+      syncSfx();
+      if (state.sfx) tap('pop');
+    };
+    $('#sfxVolume').addEventListener('input', (e) => {
+      state.sfxVolume = Number(e.target.value) / 100;
+      save();
+      if (engine) engine.setSfx(!!state.sfx, state.sfxVolume);
+    });
+    document.querySelectorAll('[data-tuning]').forEach((b) => {
+      b.onclick = () => {
+        state.tuning = b.dataset.tuning === '528' ? '528' : '432';
+        save();
+        syncTuning();
+      };
+    });
+    const bgPick = document.createElement('input');
+    bgPick.type = 'color';
+    bgPick.id = 'bgCustom';
+    bgPick.setAttribute('aria-label', 'Custom desk color');
+    bgPick.value = state.customBg || '#f6e7f4';
+    bgPick.addEventListener('input', (e) => { state.customBg = e.target.value; save(); applyTheme(); });
+    $('#bgdots').append(bgPick);
+    window.addEventListener('keydown', (e) => {
+      const tag = e.target && e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const inBook = document.body.dataset.screen === 'book';
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && inBook) {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y' && inBook) {
+        e.preventDefault();
+        redo();
+      }
+      if (!inBook) return;
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); step(1); }
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); step(-1); }
+    });
+    window.addEventListener('resize', () => {
+      if (document.body.dataset.screen !== 'book') return;
+      fitPage();
+      if (drawingNow()) draw();
+    });
+  }
+
+  buildCrayons();
+  buildPalettes();
+  buildPatterns();
+  buildSounds();
+  buildThemes();
+  bind();
+  $('#volume').value = Math.round(state.volume * 100);
+  syncSfx();
+  syncTuning();
+  applyTheme();
+  renderRecent();
+  syncStamp();
+  setTool(state.tool === 'erase' || state.tool === 'stamp' || state.tool === 'magic' ? state.tool : 'fill');
+  paintCover();
+  setScreen('cover');
+
+
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();

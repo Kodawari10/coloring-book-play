@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Coloring Book</title>
+<meta name="description" content="A cozy kawaii coloring book: mandalas, cute animals, relaxing sounds, and pages you can keep.">
+<meta name="theme-color" content="#f6e7f4">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/book.css">
+</head>
+<body data-theme="pastel" data-screen="cover">
+<svg class="doodle d1" viewBox="0 0 64 64" aria-hidden="true"><path fill="#f3a0c0" d="M32 54C14 40 8 28 14 20c6-8 14-4 18 2 4-6 12-10 18-2 6 8 0 20-18 34z"/></svg>
+<svg class="doodle d2" viewBox="0 0 64 64" aria-hidden="true"><path fill="#f6d56b" d="M32 6l6 16h16l-13 10 5 16-14-10-14 10 5-16L10 22h16z"/></svg>
+<svg class="doodle d3" viewBox="0 0 80 40" aria-hidden="true"><path fill="none" stroke="#7d6b8a" stroke-width="2" d="M4 28c8-16 16-16 24 0s16 16 24 0 16-16 24 0"/></svg>
+<svg class="doodle d4" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="8" fill="#9fd7ee"/><circle cx="20" cy="22" r="2" fill="#fff"/></svg>
+<svg class="doodle d5" viewBox="0 0 90 50" aria-hidden="true"><path fill="#fff" d="M22 36c-8 0-14-6-14-13 0-6 4-11 10-12 2-8 10-13 18-11 6-6 16-6 22 0 8 1 14 8 14 16 0 9-8 16-17 16H22z"/></svg>
+<svg class="doodle d6" viewBox="0 0 48 48" aria-hidden="true"><path fill="#f6d56b" d="M24 4l3 12 12 3-12 3-3 12-3-12-12-3 12-3z"/></svg>
+
+<header class="top">
+  <button class="brand" id="homeBtn" type="button">
+    <b>Coloring Book</b>
+    <small>paper &amp; crayons</small>
+  </button>
+  <div class="spacer"></div>
+  <button class="pill" id="galleryBtn" type="button">Contents</button>
+  <button class="pill" id="backupBtn" type="button">Backup</button>
+  <button class="iconbtn" id="soundQuick" type="button" aria-pressed="false" title="Sounds">♪</button>
+</header>
+
+<main>
+  <section id="screen-cover" class="screen">
+    <div class="cover-wrap">
+      <button class="today-card hidden" id="todayCard" type="button">
+        <span class="today-face" id="todayFace" aria-hidden="true">♥</span>
+        <span class="today-copy">
+          <span class="today-kicker" id="todayKicker">Today's page</span>
+          <span class="today-name" id="todayName"></span>
+          <span class="today-streak" id="todayStreak"></span>
+        </span>
+        <span class="today-go" id="todayGo">Color it</span>
+      </button>
+      <button class="cover-book" id="openBook" type="button" aria-label="Open the coloring book">
+        <span class="cover-spine" aria-hidden="true"></span>
+        <span class="cover-front">
+          <span class="cover-sticker s-heart" aria-hidden="true">♥</span>
+          <span class="cover-sticker s-star" aria-hidden="true">★</span>
+          <span class="cover-top">
+            <span>
+              <span class="cover-kicker">a little paper book</span>
+              <h2>Coloring<br>Book</h2>
+            </span>
+            <span class="cover-mascot" aria-hidden="true">
+              <svg viewBox="0 0 140 160">
+                <ellipse cx="70" cy="128" rx="28" ry="20" fill="#fffaf3"/>
+                <ellipse cx="52" cy="42" rx="12" ry="26" fill="#fffaf3"/>
+                <ellipse cx="88" cy="42" rx="12" ry="26" fill="#fffaf3"/>
+                <ellipse cx="52" cy="46" rx="6" ry="16" fill="#f7b7d4"/>
+                <ellipse cx="88" cy="46" rx="6" ry="16" fill="#f7b7d4"/>
+                <circle cx="70" cy="86" r="40" fill="#fffaf3"/>
+                <g class="mascot-arm">
+                  <ellipse cx="28" cy="108" rx="10" ry="14" fill="#fffaf3"/>
+                </g>
+                <ellipse cx="112" cy="110" rx="10" ry="12" fill="#fffaf3"/>
+                <ellipse cx="54" cy="82" rx="10" ry="12" fill="#2b2428"/>
+                <ellipse cx="86" cy="82" rx="10" ry="12" fill="#2b2428"/>
+                <circle cx="57" cy="78" r="3.2" fill="#fff"/>
+                <circle cx="89" cy="78" r="3.2" fill="#fff"/>
+                <ellipse cx="44" cy="96" rx="7" ry="4" fill="#f7b7d4"/>
+                <ellipse cx="96" cy="96" rx="7" ry="4" fill="#f7b7d4"/>
+                <path d="M60 100c4 6 8 6 10 2 2 4 6 4 10-2" fill="none" stroke="#2b2428" stroke-width="2.4" stroke-linecap="round"/>
+                <path d="M96 58c8-10 22-8 24 2-10 2-18 6-24 12-2-6-2-10 0-14z" fill="#f7b7d4"/>
+              </svg>
+            </span>
+          </span>
+          <span class="cover-sub">Pastel pages, kawaii friends, and a tin of crayons. Color a page, then keep it.</span>
+          <canvas class="cover-art" id="coverArt" width="440" height="440" aria-hidden="true"></canvas>
+          <span class="cover-btn">Open the book</span>
+        </span>
+      </button>
+      <p class="cover-note">42 pictures, one to a page · phone &amp; laptop · works offline</p>
+    </div>
+  </section>
+
+  <section id="screen-book" class="screen hidden">
+    <div class="studio">
+      <div class="stage">
+        <div class="desk-tools">
+        <div class="tools" style="margin-bottom:8px">
+          <button class="tool" id="tool-fill" type="button" aria-pressed="true"><i class="pencil-ico" aria-hidden="true"></i> Pencil</button>
+          <button class="tool" id="tool-erase" type="button" aria-pressed="false"><i class="eraser-ico" aria-hidden="true"></i> Eraser</button>
+          <button class="tool" id="tool-undo" type="button" title="Undo">Undo</button>
+          <button class="tool" id="tool-redo" type="button" title="Redo" disabled>Redo</button>
+          <button class="tool" id="tool-clear" type="button">Clear</button>
+          <button class="tool" id="tool-surprise" type="button">Surprise me</button>
+          <button class="tool" id="tool-magic" type="button" aria-pressed="false">Magic</button>
+          <button class="tool" id="tool-stamp" type="button" aria-pressed="false">Stickers</button>
+          <button class="tool" id="btn-png" type="button">Save picture</button>
+          <button class="tool" id="suppliesBtn" type="button" aria-pressed="false">More</button>
+        </div>
+        <div id="zoomBar" class="zoom-bar">
+          <button class="tool" id="zoomOut" type="button" aria-label="Zoom out">−</button>
+          <input id="zoomSlider" type="range" min="1" max="3" step="0.25" value="1" aria-label="Zoom">
+          <button class="tool" id="zoomIn" type="button" aria-label="Zoom in">+</button>
+          <button class="tool" id="zoomFit" type="button">Fit</button>
+        </div>
+        </div>
+        <div id="stampBar" class="extra-bar hidden" role="group" aria-label="Stickers">
+          <button type="button" data-stamp="heart" aria-pressed="true" aria-label="Heart sticker">♥</button>
+          <button type="button" data-stamp="star" aria-pressed="false" aria-label="Star sticker">★</button>
+          <button type="button" data-stamp="spark" aria-pressed="false" aria-label="Sparkle sticker">✦</button>
+          <button type="button" data-stamp="flower" aria-pressed="false" aria-label="Flower sticker">❀</button>
+        </div>
+        <div id="magicBar" class="extra-bar hidden" role="group" aria-label="Magic fill">
+          <button type="button" data-magic="dots" aria-pressed="true">Dots</button>
+          <button type="button" data-magic="stripe" aria-pressed="false">Stripes</button>
+          <button type="button" data-magic="wash" aria-pressed="false">Soft wash</button>
+        </div>
+        <div class="spread" id="spread">
+          <div class="leaf" id="leafLeft"></div>
+          <div class="gutter" aria-hidden="true"></div>
+          <div class="leaf" id="leafRight"></div>
+        </div>
+        <div class="pager">
+          <button class="iconbtn" id="pagePrev" type="button" aria-label="Previous page">‹</button>
+          <div>
+            <div class="name" id="pageName">Lotus Bloom</div>
+            <div class="meta" id="pageMeta"></div>
+          </div>
+          <button class="iconbtn" id="pageNext" type="button" aria-label="Next page">›</button>
+        </div>
+      </div>
+
+      <aside class="stationery">
+        <div class="tin">
+          <div class="kicker">Crayon tin</div>
+          <h3>Pick a color</h3>
+          <div class="crayons" id="crayons"></div>
+          <div class="palettes" id="palettes"></div>
+          <div class="patterns" id="patterns" role="group" aria-label="Patterns"></div>
+          <div class="color-readout">
+            <div class="swatch-lg" id="currentSwatch"></div>
+            <div>
+              <div class="magic-label">Magic crayon</div>
+              <div class="hex" id="hexLabel">#000000</div>
+            </div>
+            <input type="color" id="magicPicker" aria-label="Magic crayon color picker" value="#3aa0d8">
+          </div>
+          <label class="slider">Hue <span id="hueVal"></span>
+            <input id="hue" type="range" min="0" max="360" value="200">
+          </label>
+          <label class="slider">Saturation <span id="satVal"></span>
+            <input id="sat" type="range" min="0" max="100" value="80">
+          </label>
+          <label class="slider">Lightness <span id="litVal"></span>
+            <input id="lit" type="range" min="0" max="100" value="55">
+          </label>
+          <div class="recent" id="recent"></div>
+        </div>
+
+        <div class="card" id="soundCard">
+          <div class="kicker">Music box</div>
+          <h3>Soft sounds</h3>
+          <div id="sounds"></div>
+          <div class="kicker" style="margin-top:10px">Tuning</div>
+          <div class="seg" id="tuning" role="group" aria-label="Tuning">
+            <button type="button" data-tuning="432" aria-pressed="true">432 Hz</button>
+            <button type="button" data-tuning="528" aria-pressed="false">528 Hz</button>
+          </div>
+          <p class="small" id="tuningNote">Tuned to 432 Hz. A is 432.</p>
+          <div class="row" style="margin-top:8px">
+            <button class="tool" id="mixToggle" type="button" aria-pressed="true">Mixing on</button>
+            <button class="tool" id="stopSounds" type="button">Stop all</button>
+            <label class="slider" style="flex:1;min-width:140px">Volume
+              <input id="volume" type="range" min="0" max="100" value="60" aria-label="Volume">
+            </label>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <button class="tool" id="sfxToggle" type="button" aria-pressed="false">Crayon taps off</button>
+            <label class="slider" style="flex:1;min-width:120px">Taps
+              <input id="sfxVolume" type="range" min="0" max="100" value="35" aria-label="Crayon tap volume">
+            </label>
+          </div>
+          <p class="small hidden" id="audioErr">Sound could not start in this window.</p>
+        </div>
+
+        <div class="card">
+          <div class="kicker">Around the book</div>
+          <h3>Desk theme</h3>
+          <div class="sounds" id="themes"></div>
+          <div class="kicker" style="margin-top:8px">Background</div>
+          <div class="bgdots" id="bgdots"></div>
+        </div>
+      </aside>
+    </div>
+    <div id="park" hidden>
+      <div id="sheet" class="sheet">
+        <canvas id="pageCanvas" aria-label="Coloring page"></canvas>
+      </div>
+      <div id="facing" class="sheet facing">
+        <canvas id="facingCanvas" aria-hidden="true"></canvas>
+      </div>
+      <div id="contentsPage" class="contents-page">
+        <div class="gallery-head">
+          <div>
+            <h2 id="galleryTitle">Contents</h2>
+            <p class="gallery-note">One picture on each page. Tap a number to open that page.</p>
+          </div>
+          <div class="seg" role="tablist" aria-label="Page kinds">
+            <button type="button" id="filter-all" data-filter="all" aria-pressed="true">All</button>
+            <button type="button" id="filter-animal" data-filter="animal" aria-pressed="false">Animals</button>
+            <button type="button" id="filter-mandala" data-filter="mandala" aria-pressed="false">Mandalas</button>
+            <button type="button" id="filter-new" data-filter="new" aria-pressed="false">New</button>
+            <button type="button" id="filter-mine" data-filter="mine" aria-pressed="false">My art</button>
+          </div>
+        </div>
+        <div class="thumbs" id="thumbs"></div>
+      </div>
+      <div id="backPage" class="back-page">
+        <p class="cover-kicker">the back cover</p>
+        <h2>The end</h2>
+        <p>Every page kept the same picture.</p>
+        <button class="cover-btn" id="closeBook" type="button">Close the book</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="modalRoot"></div>
+<div id="toast" class="hidden" role="status" aria-live="polite"></div>
+
+<script src="js/pages.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/daily.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
